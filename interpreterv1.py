@@ -1,4 +1,4 @@
-from intbase import InterpreterBase
+from intbase import InterpreterBase, ErrorType
 from bparser import BParser
 
 filename = "/Users/kellyyu/Downloads/23SP/CS131/P1/spring-23-project-starter/brew.txt"
@@ -20,21 +20,23 @@ class Interpreter(InterpreterBase):
         self.classes = {}
 
     # map classes to their definitions
-    # TODO: Add check here for more than two classes of same name.
     def __track_all_classes__(self, parsed_program):
         for class_def in parsed_program:
-            self.classes[class_def[1]] = class_def[2:]                  # {'class_name' : ['class_def']}
+            if class_def[1] in self.classes:
+                super().error(ErrorType.TYPE_ERROR, "Duplicate classes not allowed.")
+            self.classes[class_def[1]] = class_def[2:]                                      # {'class_name' : ['class_def']}
 
     # returns a list containing a particular class's definition
     # TODO: Return something else if class_name is not a key (class does not exist)
     def __find_class_definition__(self, class_name):
-        return self.classes[class_name]                                 # returns: ['class_def']
+        class_def = self.classes.get(class_name)
+        return class_def                                                                    # returns: ['class_def']
     
     def run(self, program):
         # parse the program into a more easily processed form
         result, parsed_program = BParser.parse(program)
         if result == False:
-            return super().error(3, "Failed to parse file.")            #TODO: Check if this is the right ERROR_TYPE.
+            return super().error(ErrorType.SYNTAX_ERROR, "Failed to parse file.")            #TODO: Check if this is the right ERROR_TYPE.
         else:
             print(parsed_program)
             print("-------------------------------------------------------------------------------------------------------------")
@@ -61,22 +63,27 @@ class ClassDefinition:
         # store each class's name (help with type checking later?) & their methods (list) and fields (list)
         # TODO: check if keys are better to track duplication errors.
         self.class_name = name
-        self.my_methods = []
-        self.my_fields = []
+        self.my_methods = {}
+        self.my_fields = {}
+        itp = Interpreter()
 
         for item in definition:
-            if item[0] == 'field':
-                self.my_fields.append(item)       #['field', 'field_name', 'init_value']
-            elif item[0] == 'method':
-                self.my_methods.append(item)      #['method', 'method_name', ['params'], ['top-level statement']]
+            if item[0] == 'field':                           #{'field': ['field_name', 'init_value']}
+                if(item[1] in self.my_fields):
+                    itp.error(ErrorType.NAME_ERROR, "Fields cannot share the same name.")
+                self.my_fields[item[1]] = item[2]
+            elif item[0] == 'method':                        #{'method': ['method_name', ['params'], ['top-level statement']]}
+                if(item[1] in self.my_methods):
+                    itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
+                self.my_methods[item[1]] = item[2:]
 
     # use definition of a class to create & return an instance of object
     def instantiate_object(self): 
         obj = ObjectDefinition()
-        for method in self.my_methods:
-            obj.add_method(method[1], method[2:])
-        for field in self.my_fields:
-            obj.add_field(field[1], field[2])
+        for name, definition in self.my_methods.items():
+            obj.add_method(name, definition)
+        for name, init_val in self.my_fields.items():
+            obj.add_field(name, init_val)
         return obj     
 
 def  evaluate_expression(expression):    #return int/string ('""')/bool constants as strings, or an object reference
@@ -258,7 +265,6 @@ class ObjectDefinition:
         return self.my_methods[method_name]
     
     # get top level statement (single line or 'begin' with sublines)            {'method' : 'name', params, ['top-level statement name']}
-    # TODO: Do we need to check for invalid top level statements?
     def get_top_level_statement(self, method_name):
         return self.my_methods[method_name][3][0]
 
