@@ -17,14 +17,16 @@ test_statement = ['if', ['!=', '"a"', '"b"'], ['if', ['==', '1', '1'], ['print',
 class Interpreter(InterpreterBase):
     def __init__(self, console_output=True, inp=None, trace_output=False):
         super().__init__(console_output, inp)   # call InterpreterBase’s constructor
-
-     # map classes to their definitions
-    def __track_classes__(self, parsed_program):
         self.classes = {}
+
+    # map classes to their definitions
+    # TODO: Add check here for more than two classes of same name.
+    def __track_all_classes__(self, parsed_program):
         for class_def in parsed_program:
             self.classes[class_def[1]] = class_def[2:]                  # {'class_name' : ['class_def']}
 
     # returns a list containing a particular class's definition
+    # TODO: Return something else if class_name is not a key (class does not exist)
     def __find_class_definition__(self, class_name):
         return self.classes[class_name]                                 # returns: ['class_def']
     
@@ -32,12 +34,14 @@ class Interpreter(InterpreterBase):
         # parse the program into a more easily processed form
         result, parsed_program = BParser.parse(program)
         if result == False:
-            return super().error(3, "Failed to parse file.")
+            return super().error(3, "Failed to parse file.")            #TODO: Check if this is the right ERROR_TYPE.
         else:
             print(parsed_program)
-            print("-------------")
-            self.__track_classes__(parsed_program)
+            print("-------------------------------------------------------------------------------------------------------------")
+            self.__track_all_classes__(parsed_program)
             class_def = self.__find_class_definition__("main")
+
+            # create a "main" class --> create object of type "main" --> call object's "main" method
             main_class = ClassDefinition("main", class_def)
             main_obj = main_class.instantiate_object()
             # TODO: Run method "main". Currently using run_statement for testing.
@@ -47,14 +51,15 @@ class Interpreter(InterpreterBase):
 
 """     √ self.__discover_all_classes_and_track_them(parsed_program)
         √ class_def = self.__find_definition_for_class("main")
-        √ obj = class_def.instantiate_object()  # function for classes -- to create instances of class type
-        obj.run_method("main")  # function -- to run methods associated with objects
+        √ obj = class_def.instantiate_object() 
+        obj.run_method("main")
 """
 
 class ClassDefinition:
     # constructor for a ClassDefinition
     def __init__(self, name, definition):
-        # store name of each class & their methods (list) and fields (list)
+        # store each class's name (help with type checking later?) & their methods (list) and fields (list)
+        # TODO: check if keys are better to track duplication errors.
         self.class_name = name
         self.my_methods = []
         self.my_fields = []
@@ -63,11 +68,10 @@ class ClassDefinition:
             if item[0] == 'field':
                 self.my_fields.append(item)       #['field', 'field_name', 'init_value']
             elif item[0] == 'method':
-                self.my_methods.append(item)      #['method', 'method_name', ['params'], ['top-level statement' [body or sub-methods]]]
+                self.my_methods.append(item)      #['method', 'method_name', ['params'], ['top-level statement']]
 
-    # uses the definition of a class to create and return an instance of it (assemble object)
+    # use definition of a class to create & return an instance of object
     def instantiate_object(self): 
-        # create an instance
         obj = ObjectDefinition()
         for method in self.my_methods:
             obj.add_method(method[1], method[2:])
@@ -81,7 +85,7 @@ def  evaluate_expression(expression):    #return int/string ('""')/bool constant
 
     if(type(expression)!=list):
         # TODO: if expression is a variable ==> retrieve and return its value
-        # else expression is a constant ==> return expression
+        # else expression is a constant (int, string '""', true/false, null) ==> return expression
         return expression
 
     # expression is arithmetics, concatenation, or comparison (parameter is a list)
@@ -225,10 +229,12 @@ class ObjectDefinition:
         self.my_fields = {}
 
     # map 'method' to its 'definition'
+    # TODO: Do I need a deep copy of method def? So it doesn't affect the parameters for other objects with same method? TEST
     def add_method(self, method_name, method_def):
         self.my_methods[method_name] = method_def       #{'method_name' : ['params'], ['top-level statement' [body or sub-methods]]}
     
     # map 'field' to its 'initial value'
+    # TODO: Do I need a deep copy of field names? So it doesn't affect the fields for other objects with same field names? TEST
     def add_field(self, name, init_val):
         self.my_fields[name] = init_val                 #{'field_name' : 'init_value' (can hold curr value later too)}
 
@@ -240,17 +246,19 @@ class ObjectDefinition:
         result = self.__run_statement(statement)
         return result """
         method = self.__find_method(method_name)
-        statement = self.get_top_level_statement(method_name)
+        statement = self.get_top_level_statement(method)
         result = self.__run_statement(statement)
         return result
 
 # IMPLEMENT, understand logic :(
 
     # find method's definition by method name
+    # TODO: Return something else if method name not found.
     def __find_method(self, method_name):
         return self.my_methods[method_name]
     
-    # get top level statement (single line or 'begin' with sublines)
+    # get top level statement (single line or 'begin' with sublines)            {'method' : 'name', params, ['top-level statement name']}
+    # TODO: Do we need to check for invalid top level statements?
     def get_top_level_statement(self, method_name):
         return self.my_methods[method_name][3][0]
 
