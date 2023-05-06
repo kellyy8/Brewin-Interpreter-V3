@@ -12,7 +12,7 @@ inputStrings = ""
 for item in file_contents:
     inputStrings += item
 
-test_statement =['print', '1', '"here\'s a result "', ['*', '3', '5'], '" and here\'s a boolean"', 'true', '" "', ['+', '"race"', '"car"']]
+test_statement = [['if', ['==', '0', ['%', '4', '2']], ['begin', ['print', '"one line"'], ['print', '"two line"']], ['begin', ['print', '"no line"'], ['print', '"still no line"']]]]
 
 class Interpreter(InterpreterBase):
     def __init__(self, console_output=True, inp=None, trace_output=False):
@@ -35,12 +35,14 @@ class Interpreter(InterpreterBase):
             return super().error(3, "Failed to parse file.")
         else:
             print(parsed_program)
+            print("-------------")
             self.__track_classes__(parsed_program)
             class_def = self.__find_class_definition__("main")
             main_class = ClassDefinition("main", class_def)
             main_obj = main_class.instantiate_object()
+            # TODO: Run method "main". Currently using run_statement for testing.
             # for item in test_statement:
-            #     main_obj.run_statement(item)     # FIX: run method "main", using run_statement for testing purposes
+            #     main_obj.run_statement(item)
             main_obj.run_statement(test_statement)
 
 """     √ self.__discover_all_classes_and_track_them(parsed_program)
@@ -73,9 +75,16 @@ class ClassDefinition:
             obj.add_field(field[1], field[2])
         return obj     
 
-def  evaluate_expression(expression):    #returns int, string, bool, or object reference
+def  evaluate_expression(expression):    #return int/string ('""')/bool constants as strings, or an object reference
+    # expr examples = ['true'] ['num'] ['>', 'n', '0'], ['*', 'n', 'result'], ['call', 'me', 'factorial', 'num']
     itp = Interpreter()
-    # expr examples = ['>', 'n', '0'], ['*', 'n', 'result'], ['call', 'me', 'factorial', 'num']
+
+    if(type(expression)!=list):
+        # TODO: if expression is a variable ==> retrieve and return its value
+        # else expression is a constant ==> return expression
+        return expression
+
+    # expression is arithmetics, concatenation, or comparison (parameter is a list)
     add_op = {'+'}
     math_ops = {'-', '*', '/', '%'}
     only_int_and_str_compare_ops = {'<', '>', '<=', '>='}
@@ -88,7 +97,6 @@ def  evaluate_expression(expression):    #returns int, string, bool, or object r
     all_ops = add_op.union(math_ops.union(compare_ops))
     
     for expr in reversed(expression):
-        # TODO: Handle unary NOT operation.
         # TODO: Handle function calls & object instantiations (may return string, int, bool, or object?)
         #     elif expr[0] == 'call':
         #         itp.output("Call function.")
@@ -98,16 +106,16 @@ def  evaluate_expression(expression):    #returns int, string, bool, or object r
         # 'expression' operand
         if type(expr) == list:
             stack.append(expr)
-
+        # 'unary NOT' operand
         elif expr == '!':
             op = stack.pop()
-            if op!='true' and op!='false':
+            if op!=itp.TRUE_DEF and op!=itp.FALSE_DEF:
                 itp.error(1, "Unary operations only works with boolean operands.")
-            elif op=='true':
-                stack.append('false')
+            elif op==itp.TRUE_DEF:
+                stack.append(itp.FALSE_DEF)
             else:
-                stack.append('true')
-
+                stack.append(itp.TRUE_DEF)
+        # perform operation
         elif expr in all_ops:
             op1 = stack.pop()
             op2 = stack.pop()
@@ -126,15 +134,15 @@ def  evaluate_expression(expression):    #returns int, string, bool, or object r
             # TODO: Account for op1 and op2 being objects. (not sure if i need to do this; it's for null vs objects)
             # convert op1 and op2 into int, string, or bool constants, or null
             if op1[0] == '"': op1 = op1[1:-1]
-            elif op1 == 'true': op1 = True
-            elif op1 == 'false': op1 = False
-            elif op1 == 'null': op1 = None
+            elif op1 == itp.TRUE_DEF: op1 = True
+            elif op1 == itp.FALSE_DEF: op1 = False
+            elif op1 == itp.NULL_DEF: op1 = None
             else: op1 = int(op1)
 
             if op2[0] == '"': op2 = op2[1:-1]
-            elif op2 == 'true': op2 = True
-            elif op2 == 'false': op2 = False
-            elif op2 == 'null': op2 = None
+            elif op2 == itp.TRUE_DEF: op2 = True
+            elif op2 == itp.FALSE_DEF: op2 = False
+            elif op2 == itp.NULL_DEF: op2 = None
             else: op2 = int(op2)
 
             # check for type compatibility & operand compatibility
@@ -178,11 +186,12 @@ def  evaluate_expression(expression):    #returns int, string, bool, or object r
             elif(type(result)==str):
                 result = '"' + result + '"'
             elif(type(result)==bool):
-                if(result): result = 'true'
-                else: result = 'false'
+                if(result): result = itp.TRUE_DEF
+                else: result = itp.FALSE_DEF
 
             stack.append(result)
 
+        # store operand into stack
         else:
             stack.append(expr)
         
@@ -249,10 +258,12 @@ class ObjectDefinition:
         return self.my_methods[method_name][3][0]
 
     # runs/interprets the passed-in statement until completion and gets the result, if any
+    # TODO: Change all to private member functions later. Currently implementing some as public methods.
     def run_statement(self, statement):
-        if False:
-            return 0
-        if statement[0] == 'print':
+        itp = Interpreter()
+        result = "Did not succeeed :(."
+
+        if statement[0] == itp.PRINT_DEF:
             result = execute_print_statement(statement[1:])
         # elif is_an_input_statement(statement):
         #     result = self.__execute_input_statement(statement)
@@ -260,14 +271,58 @@ class ObjectDefinition:
         #     result = self.__execute_call_statement(statement)
         # elif is_a_while_statement(statement):
         #     result = self.__execute_while_statement(statement)
-        # elif is_an_if_statement(statement):
-        #     result = self.__execute_if_statement(statement)
         # elif is_a_return_statement(statement):
         #     result = self.__execute_return_statement(statement)
-        # elif statement == 'begin':
-        #     result = self.__execute_all_sub_statements_of_begin_statement(statement) 
+
+        #TODO: check if other 'statements' have statement = [[name, []]] format (outer list = name followed by inner list)
+        elif type(statement[0])==list:
+            if statement[0][0] == itp.BEGIN_DEF:
+                result = self.__execute_all_sub_statements_of_begin_statement(statement[0][1:])
+            elif statement[0][0] == itp.IF_DEF:
+                result = self.__execute_if_statement(statement[0][1:])
         return result
-        # return 0
+
+    def __execute_all_sub_statements_of_begin_statement(self, statement):
+        itp = Interpreter()
+        for substatement in statement:
+            # itp.output(substatement)
+            self.run_statement(substatement)
+    
+    def __execute_if_statement(self, statement):            # [if, [[condition], [if-body], [else-body]]]
+        itp = Interpreter()
+        condition_result = evaluate_expression(statement[0])
+
+        if(type(statement[1])==list):
+            # add back outer brackets to contain begin / if-else statement defs
+            if_body = [statement[1]]
+        else:
+            if_body = statement[1]
+
+        # condition is not a boolean
+        if(condition_result != itp.TRUE_DEF and condition_result != itp.FALSE_DEF):
+            itp = Interpreter()
+            itp.error(1, "Condition of the if statement must evaluate to a boolean type.")
+        # condition passes
+        elif(condition_result == itp.TRUE_DEF):
+            self.run_statement(if_body)
+        # condition fails and there's an else-body
+        elif (len(statement)==3):
+            if(type(statement[2])==list):
+                else_body = [statement[2]]
+            else:
+                else_body = statement[2]
+            self.run_statement(else_body)
+
+    #TODO: Implement while statement.
+    def __execute_while_statement(self, statement):             # [while, [[condition], [body]]]
+        itp = Interpreter()
+        condition_result = evaluate_expression(statement[0])
+        
+        # condition is not a boolean
+        if(condition_result != itp.TRUE_DEF and condition_result != itp.FALSE_DEF):
+            itp = Interpreter()
+            itp.error(1, "Condition of the if statement must evaluate to a boolean type.")
+
 
 test = Interpreter()
 test.run(file_contents)
