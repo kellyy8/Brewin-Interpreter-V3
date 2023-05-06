@@ -12,7 +12,7 @@ inputStrings = ""
 for item in file_contents:
     inputStrings += item
 
-test_statement = [['if', ['==', '0', ['%', '4', '2']], ['begin', ['print', '"one line"'], ['print', '"two line"']], ['begin', ['print', '"no line"'], ['print', '"still no line"']]]]
+test_statement = ['if', ['!=', '"a"', '"b"'], ['if', ['==', '1', '1'], ['print', '"nested if in if-body"']], ['if', ['==', '1', '1'], ['print', '"nested if in else-body"']]]
 
 class Interpreter(InterpreterBase):
     def __init__(self, console_output=True, inp=None, trace_output=False):
@@ -92,7 +92,6 @@ def  evaluate_expression(expression):    #return int/string ('""')/bool constant
     any_compare_ops = {'==', '!='}
     compare_ops = only_int_and_str_compare_ops.union(only_bool_compare_ops.union(any_compare_ops))
     
-    # new code
     stack = []
     all_ops = add_op.union(math_ops.union(compare_ops))
     
@@ -104,7 +103,7 @@ def  evaluate_expression(expression):    #return int/string ('""')/bool constant
         #         itp.output("Instantiate new object.")
 
         # 'expression' operand
-        if type(expr) == list:
+        if type(expr)==list:
             stack.append(expr)
         # 'unary NOT' operand
         elif expr == '!':
@@ -121,12 +120,12 @@ def  evaluate_expression(expression):    #return int/string ('""')/bool constant
             op2 = stack.pop()
 
             # set up operand for nested expressions: returned value of function, variable, or constant
-            if type(op1) == list:
+            if type(op1)==list:
                 op1 = evaluate_expression(op1)
             # TODO: Get value from existing variables (parameters or fields).
             # otherwise, op1 is a constant
 
-            if type(op2) == list:
+            if type(op2)==list:
                 op2 = evaluate_expression(op2)
             # TODO: Get value from existing variables (parameters or fields).
             # otherwise, op2 is a constant
@@ -197,13 +196,11 @@ def  evaluate_expression(expression):    #return int/string ('""')/bool constant
         
     return stack.pop()
 
-    # new code
-
 def execute_print_statement(statement):     #not printing object refs or null
     output = ""
     for arg in statement:
         # expressions evaluating to str, int, bool values
-        if type(arg) == list:
+        if type(arg)==list:
             result = evaluate_expression(arg)
             # remove "" from Brewin strings
             if(result[0]=='"'):
@@ -273,30 +270,20 @@ class ObjectDefinition:
         #     result = self.__execute_while_statement(statement)
         # elif is_a_return_statement(statement):
         #     result = self.__execute_return_statement(statement)
-
-        #TODO: check if other 'statements' have statement = [[name, []]] format (outer list = name followed by inner list)
-        elif type(statement[0])==list:
-            if statement[0][0] == itp.BEGIN_DEF:
-                result = self.__execute_all_sub_statements_of_begin_statement(statement[0][1:])
-            elif statement[0][0] == itp.IF_DEF:
-                result = self.__execute_if_statement(statement[0][1:])
+        elif statement[0] == itp.BEGIN_DEF:
+            result = self.__execute_all_sub_statements_of_begin_statement(statement[1:])
+        elif statement[0] == itp.IF_DEF:
+            result = self.__execute_if_statement(statement[1:])
         return result
 
     def __execute_all_sub_statements_of_begin_statement(self, statement):
-        itp = Interpreter()
         for substatement in statement:
-            # itp.output(substatement)
             self.run_statement(substatement)
     
     def __execute_if_statement(self, statement):            # [if, [[condition], [if-body], [else-body]]]
         itp = Interpreter()
         condition_result = evaluate_expression(statement[0])
-
-        if(type(statement[1])==list):
-            # add back outer brackets to contain begin / if-else statement defs
-            if_body = [statement[1]]
-        else:
-            if_body = statement[1]
+        if_body = statement[1]
 
         # condition is not a boolean
         if(condition_result != itp.TRUE_DEF and condition_result != itp.FALSE_DEF):
@@ -307,10 +294,7 @@ class ObjectDefinition:
             self.run_statement(if_body)
         # condition fails and there's an else-body
         elif (len(statement)==3):
-            if(type(statement[2])==list):
-                else_body = [statement[2]]
-            else:
-                else_body = statement[2]
+            else_body = statement[2]
             self.run_statement(else_body)
 
     #TODO: Implement while statement.
@@ -323,6 +307,6 @@ class ObjectDefinition:
             itp = Interpreter()
             itp.error(1, "Condition of the if statement must evaluate to a boolean type.")
 
-
+        
 test = Interpreter()
 test.run(file_contents)
