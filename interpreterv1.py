@@ -46,16 +46,7 @@ class Interpreter(InterpreterBase):
             # create a "main" class --> create object of type "main" --> call object's "main" method
             main_class = ClassDefinition("main", class_def)
             main_obj = main_class.instantiate_object()
-            # TODO: Run method "main". Currently using run_statement for testing.
-            # for item in test_statement:
-            #     main_obj.run_statement(item)
-            main_obj.run_statement(test_statement)
-
-"""     √ self.__discover_all_classes_and_track_them(parsed_program)
-        √ class_def = self.__find_definition_for_class("main")
-        √ obj = class_def.instantiate_object() 
-        obj.run_method("main")
-"""
+            main_obj.call_method("main")
 
 class ClassDefinition:
     # constructor for a ClassDefinition
@@ -86,7 +77,7 @@ class ClassDefinition:
             obj.add_field(name, init_val)
         return obj     
 
-def  evaluate_expression(expression):    #return int/string ('""')/bool constants as strings, or an object reference
+def evaluate_expression(expression):    #return int/string ('""')/bool constants as strings, or an object reference
     # expr examples = ['true'] ['num'] ['>', 'n', '0'], ['*', 'n', 'result'], ['call', 'me', 'factorial', 'num']
     itp = Interpreter()
 
@@ -238,35 +229,36 @@ class ObjectDefinition:
     # map 'method' to its 'definition'
     # TODO: Do I need a deep copy of method def? So it doesn't affect the parameters for other objects with same method? TEST
     def add_method(self, method_name, method_def):
-        self.my_methods[method_name] = method_def       #{'method_name' : ['params'], ['top-level statement' [body or sub-methods]]}
+        self.my_methods[method_name] = method_def       #{'method_name' : ['params'], ['top-level statement']}
     
     # map 'field' to its 'initial value'
     # TODO: Do I need a deep copy of field names? So it doesn't affect the fields for other objects with same field names? TEST
     def add_field(self, name, init_val):
         self.my_fields[name] = init_val                 #{'field_name' : 'init_value' (can hold curr value later too)}
 
-# IMPLEMENT
+# IMPLEMENTed
     # Interpret the specified method using the provided parameters    
-    def call_method(self, method_name, parameters):
-        """ method = self.__find_method(method_name)
-        statement = method.get_top_level_statement()
-        result = self.__run_statement(statement)
-        return result """
-        method = self.__find_method(method_name)
-        statement = self.get_top_level_statement(method)
-        result = self.__run_statement(statement)
+    # TODO: Where do I ask users for parameters?
+    def call_method(self, method_name):
+        """ √ method = self.__find_method(method_name)
+            √ statement = method.get_top_level_statement()
+             result = self.__run_statement(statement)
+            √ return result """
+        method_def = self.__find_method(method_name)
+        top_level_statement = self.get_top_level_statement(method_def)
+        result = self.run_statement(top_level_statement)                        #TODO: Privatize run_statement function.
         return result
-
-# IMPLEMENT, understand logic :(
 
     # find method's definition by method name
     # TODO: Return something else if method name not found.
-    def __find_method(self, method_name):
+    def __find_method(self, method_name):                                       # returns: [['params'], ['top-level statement']]
         return self.my_methods[method_name]
     
-    # get top level statement (single line or 'begin' with sublines)            {'method' : 'name', params, ['top-level statement name']}
-    def get_top_level_statement(self, method_name):
-        return self.my_methods[method_name][3][0]
+    # get top level statement (single line or 'begin' with sublines)
+    def get_top_level_statement(self, method_def):
+        return method_def[1]
+    
+#   IMPLEMENTed
 
     # runs/interprets the passed-in statement until completion and gets the result, if any
     # TODO: Change all to private member functions later. Currently implementing some as public methods.
