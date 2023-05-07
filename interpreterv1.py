@@ -78,151 +78,6 @@ class ClassDefinition:
             obj.add_field(name, init_val)
         return obj     
 
-def evaluate_expression(expression):    #return int/string ('""')/bool constants as strings, or an object reference
-    # expr examples = ['true'] ['num'] ['>', 'n', '0'], ['*', 'n', 'result'], ['call', 'me', 'factorial', 'num']
-    itp = Interpreter()
-
-    if(type(expression)!=list):
-        # TODO: if expression is a variable ==> retrieve and return its value
-        # else expression is a constant (int, string '""', true/false, null) ==> return expression
-        return expression
-
-    # expression is arithmetics, concatenation, or comparison (parameter is a list)
-    add_op = {'+'}
-    math_ops = {'-', '*', '/', '%'}
-    only_int_and_str_compare_ops = {'<', '>', '<=', '>='}
-    only_bool_compare_ops = {'&', '|'}
-    any_compare_ops = {'==', '!='}
-    compare_ops = only_int_and_str_compare_ops.union(only_bool_compare_ops.union(any_compare_ops))
-    
-    stack = []
-    all_ops = add_op.union(math_ops.union(compare_ops))
-    
-    for expr in reversed(expression):
-        # TODO: Handle function calls & object instantiations (may return string, int, bool, or object?)
-        #     elif expr[0] == 'call':
-        #         result = execute_call_statement(expression[1:]) ??
-        #         itp.output("Call function.")
-        #     elif expr[0] == 'new':
-        #         itp.output("Instantiate new object.")
-
-        # 'expression' operand
-        if type(expr)==list:
-            stack.append(expr)
-        # 'unary NOT' operand
-        elif expr == '!':
-            op = stack.pop()
-            if op!=itp.TRUE_DEF and op!=itp.FALSE_DEF:
-                itp.error(ErrorType.TYPE_ERROR, "Unary operations only works with boolean operands.")
-            elif op==itp.TRUE_DEF:
-                stack.append(itp.FALSE_DEF)
-            else:
-                stack.append(itp.TRUE_DEF)
-        # perform operation
-        elif expr in all_ops:
-            op1 = stack.pop()
-            op2 = stack.pop()
-
-            # set up operand for nested expressions: returned value of function, variable, or constant
-            if type(op1)==list:
-                op1 = evaluate_expression(op1)
-            # TODO: Get value from existing variables (parameters or fields).
-            # otherwise, op1 is a constant
-
-            if type(op2)==list:
-                op2 = evaluate_expression(op2)
-            # TODO: Get value from existing variables (parameters or fields).
-            # otherwise, op2 is a constant
-
-            # TODO: Account for op1 and op2 being objects. (not sure if i need to do this; it's for null vs objects)
-            # convert op1 and op2 into int, string, or bool constants, or null
-            if op1[0] == '"': op1 = op1[1:-1]
-            elif op1 == itp.TRUE_DEF: op1 = True
-            elif op1 == itp.FALSE_DEF: op1 = False
-            elif op1 == itp.NULL_DEF: op1 = None
-            else: op1 = int(op1)
-
-            if op2[0] == '"': op2 = op2[1:-1]
-            elif op2 == itp.TRUE_DEF: op2 = True
-            elif op2 == itp.FALSE_DEF: op2 = False
-            elif op2 == itp.NULL_DEF: op2 = None
-            else: op2 = int(op2)
-
-            # check for type compatibility & operand compatibility
-            if expr=='+' and not(type(op1)==int and type(op2)== int) and not(type(op1)==str and type(op2)==str):
-                itp.error(ErrorType.TYPE_ERROR, "'+' only works with integers and strings.")
-            elif expr in math_ops and (type(op1) != int or type(op2) != int):
-                itp.error(ErrorType.TYPE_ERROR, "Math operations only compatible with integers.")
-            elif expr in compare_ops:
-                if (expr in only_bool_compare_ops):
-                    if not (type(op1)==bool and type(op2)==bool):
-                        itp.error(ErrorType.TYPE_ERROR, "Logical AND and OR operations only compatible with booleans.")
-                elif (expr in only_int_and_str_compare_ops):
-                    if not(type(op1)==int and type(op2)==int) and not(type(op1)==str and type(op2)==str):
-                        itp.error(ErrorType.TYPE_ERROR, "Operands must both be integers or strings.")
-                else:
-                    if op1!=None and op2!=None and not(type(op1)==int and type(op2)==int) and not(type(op1)==str and type(op2)==str) and not(type(op1)==bool and type(op2)==bool):
-                        itp.error(ErrorType.TYPE_ERROR, "Operands must match for '==' or '!='.")
-
-            # perform math or compare operation:
-            match expr:
-                # returns string or integer values
-                case '+': result = op1 + op2
-                # returns integer values
-                case '-': result = op1 - op2
-                case '*': result = op1 * op2
-                case '/': result = op1 // op2
-                case '%': result = op1 % op2
-                # returns boolean values
-                case '>': result = op1 > op2
-                case '<': result = op1 < op2
-                case '>=': result = op1 >= op2
-                case '<=': result = op1 <= op2
-                case '==': result = op1 == op2
-                case '!=': result = op1 != op2
-                case '&': result = op1 & op2              #TODO: check if this a correct translation lol
-                case '|': result = op1 | op2
-
-            # reformat to the way ints, bools, and strings are represented
-            if(type(result)==int):
-                result = str(result)
-            elif(type(result)==str):
-                result = '"' + result + '"'
-            elif(type(result)==bool):
-                if(result): result = itp.TRUE_DEF
-                else: result = itp.FALSE_DEF
-
-            stack.append(result)
-
-        # store operand into stack
-        else:
-            stack.append(expr)
-        
-    return stack.pop()
-
-def execute_print_statement(statement):     #not printing object refs or null
-    output = ""
-    for arg in statement:
-        # expressions evaluating to str, int, bool values
-        if type(arg)==list:
-            result = evaluate_expression(arg)
-            # remove "" from Brewin strings
-            if(result[0]=='"'):
-                result = result[1:-1]
-            output += result
-        
-        # string constants
-        elif arg[0] == '"':
-            output += arg[1:-1]
-        
-        # TODO: vars referring to str, int, bool values (check if it's a field or parameter var)
-        # default case: integer and boolean constants --> printed out as they are passed into the print method
-        else:
-            output += arg
-    
-    itp = Interpreter()
-    itp.output(output)
-
 class ObjectDefinition:
     def __init__(self):
         self.my_methods = {}                                   #{'method_name' : ['params'], ['top-level statement']}
@@ -273,7 +128,7 @@ class ObjectDefinition:
         result = "Did not succeeed :(."
 
         if statement[0] == itp.PRINT_DEF:
-            result = execute_print_statement(statement[1:])
+            result = self.execute_print_statement(statement[1:])
         # elif is_an_input_statement(statement):
         #     result = self.__execute_input_statement(statement)
         elif statement[0] == itp.CALL_DEF:
@@ -287,6 +142,166 @@ class ObjectDefinition:
         elif statement[0] == itp.IF_DEF:
             result = self.__execute_if_statement(statement[1:])
         return result
+
+    def evaluate_expression(self, expression):    #return int/string ('""')/bool constants as strings, or an object reference
+        # expr examples = ['true'] ['num'] ['>', 'n', '0'], ['*', 'n', 'result'], ['call', 'me', 'factorial', 'num']
+        itp = Interpreter()
+
+        # expression is variable or constant
+        if(type(expression)!=list):
+            #expression is a constant (int, string '""', true/false, null) ==> return expression
+            if(expression[0]=='"' or expression=='true' or expression=='false' or expression=='null' or expression.isnumeric()):
+                return expression
+            # TODO: expression is a variable ==> retrieve and return its value
+            else:
+                # check params first, then fields (shadowing)
+                
+                if(value==None):
+                    value = self.my_fields[expression]
+                return 0
+
+        # expression is arithmetics, concatenation, or comparison (parameter is a list)
+        add_op = {'+'}
+        math_ops = {'-', '*', '/', '%'}
+        only_int_and_str_compare_ops = {'<', '>', '<=', '>='}
+        only_bool_compare_ops = {'&', '|'}
+        any_compare_ops = {'==', '!='}
+        compare_ops = only_int_and_str_compare_ops.union(only_bool_compare_ops.union(any_compare_ops))
+        
+        stack = []
+        all_ops = add_op.union(math_ops.union(compare_ops))
+        
+        for expr in reversed(expression):
+            # TODO: Handle function calls & object instantiations (may return string, int, bool, or object?)
+            #     elif expr[0] == 'call':
+            #         result = execute_call_statement(expression[1:]) ??
+            #         itp.output("Call function.")
+            #     elif expr[0] == 'new':
+            #         itp.output("Instantiate new object.")
+
+            # 'expression' operand
+            if type(expr)==list:
+                stack.append(expr)
+            # 'unary NOT' operand
+            elif expr == '!':
+                op = stack.pop()
+                if op!=itp.TRUE_DEF and op!=itp.FALSE_DEF:
+                    itp.error(ErrorType.TYPE_ERROR, "Unary operations only works with boolean operands.")
+                elif op==itp.TRUE_DEF:
+                    stack.append(itp.FALSE_DEF)
+                else:
+                    stack.append(itp.TRUE_DEF)
+            # perform operation
+            elif expr in all_ops:
+                op1 = stack.pop()
+                op2 = stack.pop()
+
+                # set up operand for nested expressions: returned value of function, variable, or constant
+                if type(op1)==list:
+                    op1 = self.evaluate_expression(op1)
+                # TODO: Get value from existing variables (parameters or fields).
+                # otherwise, op1 is a constant
+
+                if type(op2)==list:
+                    op2 = self.evaluate_expression(op2)
+                # TODO: Get value from existing variables (parameters or fields).
+                # otherwise, op2 is a constant
+
+                # TODO: Account for op1 and op2 being objects. (not sure if i need to do this; it's for null vs objects)
+                # convert op1 and op2 into int, string, or bool constants, or null
+                if op1[0] == '"': op1 = op1[1:-1]
+                elif op1 == itp.TRUE_DEF: op1 = True
+                elif op1 == itp.FALSE_DEF: op1 = False
+                elif op1 == itp.NULL_DEF: op1 = None
+                else: op1 = int(op1)
+
+                if op2[0] == '"': op2 = op2[1:-1]
+                elif op2 == itp.TRUE_DEF: op2 = True
+                elif op2 == itp.FALSE_DEF: op2 = False
+                elif op2 == itp.NULL_DEF: op2 = None
+                else: op2 = int(op2)
+
+                # check for type compatibility & operand compatibility
+                if expr=='+' and not(type(op1)==int and type(op2)== int) and not(type(op1)==str and type(op2)==str):
+                    itp.error(ErrorType.TYPE_ERROR, "'+' only works with integers and strings.")
+                elif expr in math_ops and (type(op1) != int or type(op2) != int):
+                    itp.error(ErrorType.TYPE_ERROR, "Math operations only compatible with integers.")
+                elif expr in compare_ops:
+                    if (expr in only_bool_compare_ops):
+                        if not (type(op1)==bool and type(op2)==bool):
+                            itp.error(ErrorType.TYPE_ERROR, "Logical AND and OR operations only compatible with booleans.")
+                    elif (expr in only_int_and_str_compare_ops):
+                        if not(type(op1)==int and type(op2)==int) and not(type(op1)==str and type(op2)==str):
+                            itp.error(ErrorType.TYPE_ERROR, "Operands must both be integers or strings.")
+                    else:
+                        if op1!=None and op2!=None and not(type(op1)==int and type(op2)==int) and not(type(op1)==str and type(op2)==str) and not(type(op1)==bool and type(op2)==bool):
+                            itp.error(ErrorType.TYPE_ERROR, "Operands must match for '==' or '!='.")
+
+                # perform math or compare operation:
+                match expr:
+                    # returns string or integer values
+                    case '+': result = op1 + op2
+                    # returns integer values
+                    case '-': result = op1 - op2
+                    case '*': result = op1 * op2
+                    case '/': result = op1 // op2
+                    case '%': result = op1 % op2
+                    # returns boolean values
+                    case '>': result = op1 > op2
+                    case '<': result = op1 < op2
+                    case '>=': result = op1 >= op2
+                    case '<=': result = op1 <= op2
+                    case '==': result = op1 == op2
+                    case '!=': result = op1 != op2
+                    case '&': result = op1 & op2              #TODO: check if this a correct translation lol
+                    case '|': result = op1 | op2
+
+                # reformat to the way ints, bools, and strings are represented
+                if(type(result)==int):
+                    result = str(result)
+                elif(type(result)==str):
+                    result = '"' + result + '"'
+                elif(type(result)==bool):
+                    if(result): result = itp.TRUE_DEF
+                    else: result = itp.FALSE_DEF
+
+                stack.append(result)
+
+            # store operand into stack
+            else:
+                stack.append(expr)
+            
+        return stack.pop()
+
+    def execute_print_statement(self, statement):     #not printing object refs or null
+        output = ""
+        for arg in statement:
+            # expressions evaluating to str, int, bool values
+            if type(arg)==list:
+                result = self.evaluate_expression(arg)
+                # remove "" from Brewin strings
+                if(result[0]=='"'):
+                    result = result[1:-1]
+                output += result
+
+            # string constants
+            elif arg[0] == '"':
+                output += arg[1:-1]
+
+            # booleans and int constants printed out as they are passed in
+            elif (arg == 'true' or arg == 'false' or arg == 'null' or arg.isnumeric()):
+                output += arg
+            
+            # TODO: vars referring to str, int, bool values (check if it's a field or parameter var)
+            else:
+                result = self.evaluate_expression(arg)
+                # remove "" from Brewin strings
+                if(result[0]=='"'):
+                    result = result[1:-1]
+                output += result
+        
+        itp = Interpreter()
+        itp.output(output)
 
     def __execute_all_sub_statements_of_begin_statement(self, statement):
         for substatement in statement:
@@ -352,3 +367,4 @@ class ObjectDefinition:
         
 test = Interpreter()
 test.run(file_contents)
+
