@@ -41,6 +41,8 @@ class Interpreter(InterpreterBase):
             print("-------------------------------------------------------------------------------------------------------------")
             self.__track_all_classes__(parsed_program)
             class_def = self.__find_class_definition__("main")
+            # if class_def is None:
+            #     super().error(ErrorType.SYNTAX_ERROR, "Must have a 'main' class.")
 
             # create a "main" class --> create object of type "main" --> call object's "main" method
             main_class = ClassDefinition("main", class_def, self)
@@ -68,6 +70,7 @@ class ClassDefinition:
                 self.my_methods[item[1]] = item[2:]
 
     # use definition of a class to create & return an instance of object
+    # TODO: Consider instantiating a Variable and Value object when creating an instance to implement PBV.
     def instantiate_object(self): 
         obj = ObjectDefinition(self.itp)
         for name, definition in self.my_methods.items():
@@ -86,9 +89,9 @@ class VariableDefinition:
         self.variable = var
 
 class MethodDefinition:
-    # store all variables (account for shadowing), 
-    def __init__(self, method_def):
-        self.visible_variables = {}
+    # store all variables (accounts for shadowing)
+    def __init__(self, method_def, object):
+        self.visible_variables = object.my_fields
         self.method_def = method_def
 
     def __add_variables(self, name, val):
@@ -136,52 +139,67 @@ class ObjectDefinition:
 
     # runs/interprets the passed-in statement until completion and gets the result, if any
     # TODO: Change all to private member functions later. Currently implementing some as public methods.
-    def run_statement(self, statement):
+    # in_scope_vars = self.my_fields by default --> arg passed in if there are params in addition to fields
+    def run_statement(self, statement, in_scope_vars=None):
         # if(self.terminate_function):
         #     return
+
+        if(in_scope_vars is None):
+            in_scope_vars = self.my_fields
         
         itp = Interpreter()
         if statement[0] == itp.PRINT_DEF:
-            self.__execute_print_statement(statement[1:])
+            self.__execute_print_statement(statement[1:], in_scope_vars)
         elif statement[0] == itp.INPUT_INT_DEF:
-            self.__execute_input_int_statement(statement[1])
+            self.__execute_input_int_statement(statement[1], in_scope_vars)
         elif statement[0] == itp.INPUT_STRING_DEF:
-            self.__execute_input_str_statement(statement[1])
+            self.__execute_input_str_statement(statement[1], in_scope_vars)
         elif statement[0] == itp.IF_DEF:
-            self.__execute_if_statement(statement[1:])        
+            self.__execute_if_statement(statement[1:], in_scope_vars)        
         elif statement[0] == itp.WHILE_DEF:
-            self.__execute_while_statement(statement[1:])
+            self.__execute_while_statement(statement[1:], in_scope_vars)
         elif statement[0] == itp.RETURN_DEF:
             #TODO: Must terminate function after this block.
             # self.terminate_function = True
             if(len(statement)==2):
                 return self.__execute_return_statement(statement[1])
         elif statement[0] == itp.BEGIN_DEF:
-            self.__execute_all_sub_statements_of_begin_statement(statement[1:])
+            self.__execute_all_sub_statements_of_begin_statement(statement[1:], in_scope_vars)
         elif statement[0] == itp.SET_DEF:
-            self.__execute_set_statement(statement[1:])
+            self.__execute_set_statement(statement[1:], in_scope_vars)
         elif statement[0] == itp.CALL_DEF:
             self.__execute_call_statement(statement[1:])
     
-    def evaluate_expression(self, expression):    #return int/string ('""')/bool constants as strings, or an object reference
+    def get_const_or_var_val(self, expr, in_scope_vars):
+        # if expression is a string, bool, null, or neg/pos int constant:
+        if(expr[0]=='"' or expr=='true' or expr=='false' or expr=='null' or expr=='-' or expr.isnumeric()):
+            return expr
+        # else: expression is a variable ==> retrieve and return its value IFF variable exists
+        else:
+            val = in_scope_vars.get(expr)
+            if(val is None):
+                self.itp.error(ErrorType.NAME_ERROR, f"No variable with the name '{expr}'.")
+            else:
+                return val
+
+    # TODO: Test if this works with everything that uses expressions/this function.
+    def evaluate_expression(self, expression, in_scope_vars):    #return int/string ('""')/bool constants as strings, or an object reference
         # expr examples = ['true'] ['num'] ['>', 'n', '0'], ['*', 'n', 'result'], ['call', 'me', 'factorial', 'num']
         itp = Interpreter()
 
+        # expression is a constant or variable
         if(type(expression)!=list):
-            # TODO: if expression is a variable ==> retrieve and return its value
-            # else expression is a constant (int, string '""', true/false, null) ==> return expression
-            return expression
+            return self.get_const_or_var_val(expression, in_scope_vars)
         
         # TODO: Test if expression is returned, and if its format is in parsed format. Return value must be in ''.
         # expression is function 'call' statement (funcs can return nothing or what eval_expr can return)
         if(expression[0]==itp.CALL_DEF):
             return self.__execute_call_statement(expression[1:])
         
-        # TODO: Test with set statement.
         # expression is 'new' object instantiation
         if(expression[0]==itp.NEW_DEF):                         # [new, class_name]
             class_def = self.itp.__find_class_definition__(expression[1])
-            if(class_def == None):
+            if(class_def is None):
                 self.itp.error(ErrorType.TYPE_ERROR, f"No class with the name: '{expression[1]}'.")
             class_obj = ClassDefinition(expression[1], class_def, self.itp)
             instance = class_obj.instantiate_object()
@@ -219,13 +237,13 @@ class ObjectDefinition:
                 # set up operand for nested expressions: returned value of function, variable, or constant
                 if type(op1)==list:
                     op1 = self.evaluate_expression(op1)
-                # TODO: Get value from existing variables (parameters or fields).
-                # otherwise, op1 is a constant
+                else:
+                    op1 = self.get_const_or_var_val(op1, in_scope_vars)
 
                 if type(op2)==list:
                     op2 = self.evaluate_expression(op2)
-                # TODO: Get value from existing variables (parameters or fields).
-                # otherwise, op2 is a constant
+                else:
+                    op2 = self.get_const_or_var_val(op2, in_scope_vars)
 
                 # TODO: Account for op1 and op2 being objects. (not sure if i need to do this; it's for null vs objects)
                 # convert op1 and op2 into int, string, or bool constants, or null
@@ -254,7 +272,7 @@ class ObjectDefinition:
                         if not(type(op1)==int and type(op2)==int) and not(type(op1)==str and type(op2)==str):
                             itp.error(ErrorType.TYPE_ERROR, "Operands must both be integers or strings.")
                     else:
-                        if op1!=None and op2!=None and not(type(op1)==int and type(op2)==int) and not(type(op1)==str and type(op2)==str) and not(type(op1)==bool and type(op2)==bool):
+                        if (op1 is not None) and (op2 is not None) and not(type(op1)==int and type(op2)==int) and not(type(op1)==str and type(op2)==str) and not(type(op1)==bool and type(op2)==bool):
                             itp.error(ErrorType.TYPE_ERROR, "Operands must match for '==' or '!='.")
 
                 # perform math or compare operation:
@@ -293,93 +311,82 @@ class ObjectDefinition:
             
         return stack.pop()
 
-    def __execute_print_statement(self, statement):     #not printing object refs or null
+    def __execute_print_statement(self, statement, in_scope_vars):    # prints: consts, vars, expr; no object refs nor null
         output = ""
         for arg in statement:
             # expressions evaluating to str, int, bool values wrapped in ''
-            if type(arg)==list:
-                result = self.evaluate_expression(arg)
-                # remove "" from Brewin strings
-                if(result[0]=='"'):
-                    result = result[1:-1]
-                output += result
-            
-            # string constants
-            elif arg[0] == '"':
-                output += arg[1:-1]
-            
-            # TODO: vars referring to str, int, bool values (check if it's a field or parameter var)
-            # default case: integer and boolean constants --> printed out as they are passed into the print method
-            else:
-                output += arg
-        
+            result = self.evaluate_expression(arg, in_scope_vars)
+            if(result[0]=='"'):
+                result = result[1:-1]
+            output += result
         self.itp.output(output)
     
-    def __execute_input_int_statement(self, statement):
-        var_name = statement
-        input = self.itp.get_input()
-        #TODO: update var_name with input
+    #ASSUMING inputi/s gets the right reference variables.
+    def __execute_input_int_statement(self, statement, in_scope_vars):
+        var = statement
+        val = self.itp.get_input()
+        in_scope_vars[var] = val
 
-    def __execute_input_str_statement(self, statement):
-        var_name = statement
-        input = '"' + self.itp.get_input() + '"'
-        #TODO: update var_name with input
+    def __execute_input_str_statement(self, statement, in_scope_vars):
+        var = statement
+        val = '"' + self.itp.get_input() + '"'
+        in_scope_vars[var] = val
 
-    def __execute_if_statement(self, statement):            # [if, [[condition], [if-body], [else-body]]]
-        itp = Interpreter()
-        condition_result = self.evaluate_expression(statement[0])
+    def __execute_if_statement(self, statement, in_scope_vars):            # [if, [[condition], [if-body], [else-body]]]
+        condition_result = self.evaluate_expression(statement[0], in_scope_vars)
         if_body = statement[1]
 
         # condition is not a boolean
-        if(condition_result != itp.TRUE_DEF and condition_result != itp.FALSE_DEF):
-            itp = Interpreter()
-            itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
+        if(condition_result != self.itp.TRUE_DEF and condition_result != self.itp.FALSE_DEF):
+            self.itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
         # condition passes
-        elif(condition_result == itp.TRUE_DEF):
-            self.run_statement(if_body)
+        elif(condition_result == self.itp.TRUE_DEF):
+            self.run_statement(if_body, in_scope_vars)
         # condition fails and there's an else-body
         elif (len(statement)==3):
             else_body = statement[2]
-            self.run_statement(else_body)
+            self.run_statement(else_body, in_scope_vars)
 
-    # TODO: Test this when set command works.
-    def __execute_while_statement(self, statement):             # [while, [condition], [body]]
-        itp = Interpreter()
-        condition_result = self.evaluate_expression(statement[0])
+    def __execute_while_statement(self, statement, in_scope_vars):             # [while, [condition], [body]]
+        condition_result = self.evaluate_expression(statement[0], in_scope_vars)
         
         # condition is not a boolean
-        if(condition_result != itp.TRUE_DEF and condition_result != itp.FALSE_DEF):
-            itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
-        elif(condition_result == itp.TRUE_DEF):
-            self.run_statement(statement[1])
+        if(condition_result != self.itp.TRUE_DEF and condition_result != self.itp.FALSE_DEF):
+            self.itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
+        else:
+            while(condition_result == self.itp.TRUE_DEF):
+                self.run_statement(statement[1], in_scope_vars)
+                condition_result = self.evaluate_expression(statement[0], in_scope_vars)
 
     # TODO: Test this when I get expression to work with function calls.
     def __execute_return_statement(self, statement):            # [return] or [return, [expression]]
         return self.evaluate_expression(statement)
 
-    def __execute_all_sub_statements_of_begin_statement(self, statement):
+    def __execute_all_sub_statements_of_begin_statement(self, statement, in_scope_vars):
         for substatement in statement:
-            self.run_statement(substatement)
+            self.run_statement(substatement, in_scope_vars)
         
     # TODO: Test if all valid values are evaluated right, and if only 1 variable is updated each time.
-    def __execute_set_statement(self, statement):               # [set, var_name, new_value]
+    def __execute_set_statement(self, statement, in_scope_vars):               # [set, var_name, new_value]
         var_name = statement[0]
         new_val = statement[1]
-        # search for parameter/field with var_name
-        # if variable not found, return NAME_ERROR
-        # else evaluate and update value   <---------- function handles constants, vars, and expr
-        new_val = self.evaluate_expression(new_val)
 
+        # ASSUMING in_scope_vars contains the right object references
+        if var_name in in_scope_vars:
+            new_val = self.evaluate_expression(new_val, in_scope_vars)  # eval_expr() handles everything set receives as new_val arg
+            in_scope_vars[var_name] = new_val
+        else:
+            self.itp.error(ErrorType.NAME_ERROR, f"No variable with the name '{var_name}'.")
+            
     # TODO: Fix so it can work with fields and parameter values.
     def __execute_call_statement(self, statement):         # ['call', 'target_object', 'method_name', param1, param2, ..., paramn]
-        itp = Interpreter()
         target_object = statement[0]
         method_name = statement[1]
         arguments = statement[2:]
 
         # Use 'self' to find method or 'object reference' to get method's definition.
-        if(target_object == 'null'):                 #TODO: Check if == 'null' or == None; prolly null cus we get obj ref from eval expressions only..right?
-            itp.error(ErrorType.FAULT_ERROR, "Target object cannot be null. Must be object reference or 'me'.")
+        if(target_object == 'null'):                 #TODO: Check if == 'null' or is None; prolly null cus we get obj ref from eval expressions only..right?
+            self.itp.error(ErrorType.FAULT_ERROR, "Target object cannot be null. Must be object reference or 'me'.")
         elif(target_object == 'me'):
             method_def = self.__find_method(method_name)
         #TODO: Get the object reference based on passed in name.
@@ -387,13 +394,13 @@ class ObjectDefinition:
             method_def = target_object.__find_method(method_name)
 
         # Check if method is undefined.
-        if(method_def==None):
-            itp.error(ErrorType.NAME_ERROR, f"Cannot find method with the name '{method_name}'.")
+        if(method_def is None):
+            self.itp.error(ErrorType.NAME_ERROR, f"Cannot find method with the name '{method_name}'.")
 
         # Check if number of arguments matches number of parameters.
         parameters = method_def[0]
         if(len(parameters) != len(arguments)):
-            itp.error(ErrorType.TYPE_ERROR, f"You passed in {len(arguments)} argument(s) for {len(parameters)} parameter(s).")
+            self.itp.error(ErrorType.TYPE_ERROR, f"You passed in {len(arguments)} argument(s) for {len(parameters)} parameter(s).")
         # Initialize all parameters.
         # TODO: Check pass by value effect.
         
@@ -402,16 +409,21 @@ class ObjectDefinition:
         #     method_obj.__add_variables(name, val)
         # for i in range(len(parameters)): #accounts for shadowing
         #     method_obj.__add_variables([parameters[i]], arguments[i])
-        
-        else:
-            # map parameters to arguments (their values)
-            param_to_val = {}
-            for i in range(len(parameters)):
-                param_to_val[parameters[i]] = arguments[i]
 
-        # # TODO: HOW DO I KNOW THAT THIS 'RUN' WORKS WITH THE arguments/assigned parameters? it's not lol
+        # map parameters to arguments values; add them to dictionary of visible variables (in-scope for method call) 
+        # TODO: Consider creating Variable and Value object pairs as well to implement PBV for parameters.
+        # (concerning race condition, even tho parameters are always reinitialized, if there's multithreading, parameters used for each method call should still be independent.)
+        # TODO: Works for 'me', but get it to work with a target_object object reference, too.
+        # TODO: Check later that I am creating a brand new dictionary for each method call.
+        visible_vars = self.my_fields
+        for i in range(len(parameters)):
+            visible_vars[parameters[i]] = arguments[i]  #(accounts for params shadowing fields)
+
+        # TODO: HOW DO I KNOW THAT THIS 'RUN' WORKS WITH THE arguments/assigned parameters?
+        # Use target_object or self to do the following cus right now it only calls self (only access to self's fields)
         top_level_statement = self.get_top_level_statement(method_def)
-        return self.run_statement(top_level_statement) #only statement that returns from run_statement? to return expression or nothing
+        # only call statement: pass in dictionary of in_scope_vars since we may have parameters to retrieve from
+        return self.run_statement(top_level_statement, visible_vars) #only statement that returns from run_statement? to return expression or nothing
 
 
 test = Interpreter()
