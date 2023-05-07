@@ -143,8 +143,10 @@ class ObjectDefinition:
         itp = Interpreter()
         if statement[0] == itp.PRINT_DEF:
             self.__execute_print_statement(statement[1:])
-        # elif is_an_input_statement(statement):
-        #     result = self.__execute_input_statement(statement)
+        elif statement[0] == itp.INPUT_INT_DEF:
+            self.__execute_input_int_statement(statement[1])
+        elif statement[0] == itp.INPUT_STRING_DEF:
+            self.__execute_input_str_statement(statement[1])
         elif statement[0] == itp.IF_DEF:
             self.__execute_if_statement(statement[1:])        
         elif statement[0] == itp.WHILE_DEF:
@@ -313,6 +315,16 @@ class ObjectDefinition:
         
         self.itp.output(output)
     
+    def __execute_input_int_statement(self, statement):
+        var_name = statement
+        input = self.itp.get_input()
+        #TODO: update var_name with input
+
+    def __execute_input_str_statement(self, statement):
+        var_name = statement
+        input = '"' + self.itp.get_input() + '"'
+        #TODO: update var_name with input
+
     def __execute_if_statement(self, statement):            # [if, [[condition], [if-body], [else-body]]]
         itp = Interpreter()
         condition_result = self.evaluate_expression(statement[0])
