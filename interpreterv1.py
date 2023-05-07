@@ -12,7 +12,7 @@ inputStrings = ""
 for item in file_contents:
     inputStrings += item
 
-test_statement = ['if', ['!=', '"a"', '"b"'], ['if', ['==', '1', '1'], ['print', '"nested if in if-body"']], ['if', ['==', '1', '1'], ['print', '"nested if in else-body"']]]
+# test_statement = ['if', ['==', '0', ['%', '4', '2']], ['print', '"x is even"'], ['print', '"x is odd"']]
 
 class Interpreter(InterpreterBase):
     def __init__(self, console_output=True, inp=None, trace_output=False):
@@ -29,8 +29,7 @@ class Interpreter(InterpreterBase):
     # returns a list containing a particular class's definition
     # TODO: Return something else if class_name is not a key (class does not exist)
     def __find_class_definition__(self, class_name):
-        class_def = self.classes.get(class_name)
-        return class_def                                                                    # returns: ['class_def']
+        return self.classes.get(class_name)                                                 # returns: ['class_def']
     
     def run(self, program):
         # parse the program into a more easily processed form
@@ -38,50 +37,69 @@ class Interpreter(InterpreterBase):
         if result == False:
             return super().error(ErrorType.SYNTAX_ERROR, "Failed to parse file.")            #TODO: Check if this is the right ERROR_TYPE.
         else:
-            # print(parsed_program)
-            # print("-------------------------------------------------------------------------------------------------------------")
+            print(parsed_program)
+            print("-------------------------------------------------------------------------------------------------------------")
             self.__track_all_classes__(parsed_program)
             class_def = self.__find_class_definition__("main")
 
             # create a "main" class --> create object of type "main" --> call object's "main" method
-            main_class = ClassDefinition("main", class_def)
+            main_class = ClassDefinition("main", class_def, self)
             main_obj = main_class.instantiate_object()
             main_obj.call_method("main")
             # main_obj.run_statement(test_statement)
 
 class ClassDefinition:
     # constructor for a ClassDefinition
-    def __init__(self, name, definition):
+    def __init__(self, name, definition, interpreter):
         # store each class's name (help with type checking later?) & their methods (list) and fields (list)
-        # TODO: check if keys are better to track duplication errors.
         self.class_name = name
         self.my_methods = {}
         self.my_fields = {}
-        itp = Interpreter()
+        self.itp = interpreter
 
         for item in definition:
             if item[0] == 'field':                           #{'field': ['field_name', 'init_value']}
                 if(item[1] in self.my_fields):
-                    itp.error(ErrorType.NAME_ERROR, "Fields cannot share the same name.")
+                    self.itp.error(ErrorType.NAME_ERROR, "Fields cannot share the same name.")
                 self.my_fields[item[1]] = item[2]
             elif item[0] == 'method':                        #{'method': ['method_name', ['params'], ['top-level statement']]}
                 if(item[1] in self.my_methods):
-                    itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
+                    self.itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
                 self.my_methods[item[1]] = item[2:]
 
     # use definition of a class to create & return an instance of object
     def instantiate_object(self): 
-        obj = ObjectDefinition()
+        obj = ObjectDefinition(self.itp)
         for name, definition in self.my_methods.items():
             obj.add_method(name, definition)
         for name, init_val in self.my_fields.items():
             obj.add_field(name, init_val)
         return obj     
 
+class ValueDefinition:
+    def __init__(self, val):
+        self.value = val
+
+class VariableDefinition:
+    # store 'value' objects
+    def __init__(self, var):
+        self.variable = var
+
+class MethodDefinition:
+    # store all variables (account for shadowing), 
+    def __init__(self, method_def):
+        self.visible_variables = {}
+        self.method_def = method_def
+
+    def __add_variables(self, name, val):
+        self.visible_variables[name] = val
+
 class ObjectDefinition:
-    def __init__(self):
+    def __init__(self, interpreter):
         self.my_methods = {}                                   #{'method_name' : ['params'], ['top-level statement']}
         self.my_fields = {}                                    #{'field_name' : 'init_value' (can hold curr value later too)}
+        # self.terminate_function = False
+        self.itp = interpreter
 
     # map 'method' to its 'definition'
     # TODO: Do I need a deep copy of method def? So it doesn't affect the parameters for other objects with same method? TEST
@@ -95,7 +113,7 @@ class ObjectDefinition:
 
 # IMPLEMENTed
     # Interpret the specified method using the provided parameters    
-    # TODO: Where do I ask users for parameters?
+    # TODO: Where do I ask users for parameters? (i think this is just for main function)
     def call_method(self, method_name):
         """ √ method = self.__find_method(method_name)
             √ statement = method.get_top_level_statement()
@@ -107,13 +125,8 @@ class ObjectDefinition:
         return result
 
     # find method's definition by method name
-    # TODO: Return something else if method name not found.
-    def __find_method(self, method_name):                                       # returns: [['params'], ['top-level statement']]
-        itp = Interpreter()
-        method_def = self.my_methods.get(method_name)
-        if(method_def==None):
-            itp.error(ErrorType.NAME_ERROR, f"No method called {method_name}.")
-        return method_def
+    def __find_method(self, method_name):                                  # returns: [['params'], ['top-level statement']]
+        return self.my_methods.get(method_name)
     
     # get top level statement (single line or 'begin' with sublines)
     def get_top_level_statement(self, method_def):
@@ -124,41 +137,53 @@ class ObjectDefinition:
     # runs/interprets the passed-in statement until completion and gets the result, if any
     # TODO: Change all to private member functions later. Currently implementing some as public methods.
     def run_statement(self, statement):
+        # if(self.terminate_function):
+        #     return
+        
         itp = Interpreter()
-        result = "Did not succeeed :(."
-
         if statement[0] == itp.PRINT_DEF:
-            result = self.execute_print_statement(statement[1:])
+            self.__execute_print_statement(statement[1:])
         # elif is_an_input_statement(statement):
         #     result = self.__execute_input_statement(statement)
-        elif statement[0] == itp.CALL_DEF:
-            result = self.__execute_call_statement(statement[1:])
-        # elif is_a_while_statement(statement):
-        #     result = self.__execute_while_statement(statement)
-        # elif is_a_return_statement(statement):
-        #     result = self.__execute_return_statement(statement)
-        elif statement[0] == itp.BEGIN_DEF:
-            result = self.__execute_all_sub_statements_of_begin_statement(statement[1:])
         elif statement[0] == itp.IF_DEF:
-            result = self.__execute_if_statement(statement[1:])
-        return result
-
+            self.__execute_if_statement(statement[1:])        
+        elif statement[0] == itp.WHILE_DEF:
+            self.__execute_while_statement(statement[1:])
+        elif statement[0] == itp.RETURN_DEF:
+            #TODO: Must terminate function after this block.
+            # self.terminate_function = True
+            if(len(statement)==2):
+                return self.__execute_return_statement(statement[1])
+        elif statement[0] == itp.BEGIN_DEF:
+            self.__execute_all_sub_statements_of_begin_statement(statement[1:])
+        elif statement[0] == itp.SET_DEF:
+            self.__execute_set_statement(statement[1:])
+        elif statement[0] == itp.CALL_DEF:
+            self.__execute_call_statement(statement[1:])
+    
     def evaluate_expression(self, expression):    #return int/string ('""')/bool constants as strings, or an object reference
         # expr examples = ['true'] ['num'] ['>', 'n', '0'], ['*', 'n', 'result'], ['call', 'me', 'factorial', 'num']
         itp = Interpreter()
 
-        # expression is variable or constant
         if(type(expression)!=list):
-            #expression is a constant (int, string '""', true/false, null) ==> return expression
-            if(expression[0]=='"' or expression=='true' or expression=='false' or expression=='null' or expression.isnumeric()):
-                return expression
-            # TODO: expression is a variable ==> retrieve and return its value
-            else:
-                # check params first, then fields (shadowing)
-                
-                if(value==None):
-                    value = self.my_fields[expression]
-                return 0
+            # TODO: if expression is a variable ==> retrieve and return its value
+            # else expression is a constant (int, string '""', true/false, null) ==> return expression
+            return expression
+        
+        # TODO: Test if expression is returned, and if its format is in parsed format. Return value must be in ''.
+        # expression is function 'call' statement (funcs can return nothing or what eval_expr can return)
+        if(expression[0]==itp.CALL_DEF):
+            return self.__execute_call_statement(expression[1:])
+        
+        # TODO: Test with set statement.
+        # expression is 'new' object instantiation
+        if(expression[0]==itp.NEW_DEF):                         # [new, class_name]
+            class_def = self.itp.__find_class_definition__(expression[1])
+            if(class_def == None):
+                self.itp.error(ErrorType.TYPE_ERROR, f"No class with the name: '{expression[1]}'.")
+            class_obj = ClassDefinition(expression[1], class_def, self.itp)
+            instance = class_obj.instantiate_object()
+            return instance
 
         # expression is arithmetics, concatenation, or comparison (parameter is a list)
         add_op = {'+'}
@@ -172,13 +197,6 @@ class ObjectDefinition:
         all_ops = add_op.union(math_ops.union(compare_ops))
         
         for expr in reversed(expression):
-            # TODO: Handle function calls & object instantiations (may return string, int, bool, or object?)
-            #     elif expr[0] == 'call':
-            #         result = execute_call_statement(expression[1:]) ??
-            #         itp.output("Call function.")
-            #     elif expr[0] == 'new':
-            #         itp.output("Instantiate new object.")
-
             # 'expression' operand
             if type(expr)==list:
                 stack.append(expr)
@@ -273,43 +291,31 @@ class ObjectDefinition:
             
         return stack.pop()
 
-    def execute_print_statement(self, statement):     #not printing object refs or null
+    def __execute_print_statement(self, statement):     #not printing object refs or null
         output = ""
         for arg in statement:
-            # expressions evaluating to str, int, bool values
+            # expressions evaluating to str, int, bool values wrapped in ''
             if type(arg)==list:
                 result = self.evaluate_expression(arg)
                 # remove "" from Brewin strings
                 if(result[0]=='"'):
                     result = result[1:-1]
                 output += result
-
+            
             # string constants
             elif arg[0] == '"':
                 output += arg[1:-1]
-
-            # booleans and int constants printed out as they are passed in
-            elif (arg == 'true' or arg == 'false' or arg == 'null' or arg.isnumeric()):
-                output += arg
             
             # TODO: vars referring to str, int, bool values (check if it's a field or parameter var)
+            # default case: integer and boolean constants --> printed out as they are passed into the print method
             else:
-                result = self.evaluate_expression(arg)
-                # remove "" from Brewin strings
-                if(result[0]=='"'):
-                    result = result[1:-1]
-                output += result
+                output += arg
         
-        itp = Interpreter()
-        itp.output(output)
-
-    def __execute_all_sub_statements_of_begin_statement(self, statement):
-        for substatement in statement:
-            self.run_statement(substatement)
+        self.itp.output(output)
     
     def __execute_if_statement(self, statement):            # [if, [[condition], [if-body], [else-body]]]
         itp = Interpreter()
-        condition_result = evaluate_expression(statement[0])
+        condition_result = self.evaluate_expression(statement[0])
         if_body = statement[1]
 
         # condition is not a boolean
@@ -324,16 +330,35 @@ class ObjectDefinition:
             else_body = statement[2]
             self.run_statement(else_body)
 
-    #TODO: Implement while statement.
-    def __execute_while_statement(self, statement):             # [while, [[condition], [body]]]
+    # TODO: Test this when set command works.
+    def __execute_while_statement(self, statement):             # [while, [condition], [body]]
         itp = Interpreter()
-        condition_result = evaluate_expression(statement[0])
+        condition_result = self.evaluate_expression(statement[0])
         
         # condition is not a boolean
         if(condition_result != itp.TRUE_DEF and condition_result != itp.FALSE_DEF):
-            itp = Interpreter()
             itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
+        elif(condition_result == itp.TRUE_DEF):
+            self.run_statement(statement[1])
 
+    # TODO: Test this when I get expression to work with function calls.
+    def __execute_return_statement(self, statement):            # [return] or [return, [expression]]
+        return self.evaluate_expression(statement)
+
+    def __execute_all_sub_statements_of_begin_statement(self, statement):
+        for substatement in statement:
+            self.run_statement(substatement)
+        
+    # TODO: Test if all valid values are evaluated right, and if only 1 variable is updated each time.
+    def __execute_set_statement(self, statement):               # [set, var_name, new_value]
+        var_name = statement[0]
+        new_val = statement[1]
+        # search for parameter/field with var_name
+        # if variable not found, return NAME_ERROR
+        # else evaluate and update value   <---------- function handles constants, vars, and expr
+        new_val = self.evaluate_expression(new_val)
+
+    # TODO: Fix so it can work with fields and parameter values.
     def __execute_call_statement(self, statement):         # ['call', 'target_object', 'method_name', param1, param2, ..., paramn]
         itp = Interpreter()
         target_object = statement[0]
@@ -348,23 +373,34 @@ class ObjectDefinition:
         #TODO: Get the object reference based on passed in name.
         else:
             method_def = target_object.__find_method(method_name)
-        
+
+        # Check if method is undefined.
+        if(method_def==None):
+            itp.error(ErrorType.NAME_ERROR, f"Cannot find method with the name '{method_name}'.")
+
         # Check if number of arguments matches number of parameters.
         parameters = method_def[0]
         if(len(parameters) != len(arguments)):
             itp.error(ErrorType.TYPE_ERROR, f"You passed in {len(arguments)} argument(s) for {len(parameters)} parameter(s).")
         # Initialize all parameters.
         # TODO: Check pass by value effect.
+        
+        # method_obj = MethodDefinition(method_def)
+        # for name, val in target_object.my_fields.items():
+        #     method_obj.__add_variables(name, val)
+        # for i in range(len(parameters)): #accounts for shadowing
+        #     method_obj.__add_variables([parameters[i]], arguments[i])
+        
         else:
             # map parameters to arguments (their values)
             param_to_val = {}
             for i in range(len(parameters)):
                 param_to_val[parameters[i]] = arguments[i]
 
-        # TODO: HOW DO I KNOW THAT THIS 'RUN' WORKS WITH THE arguments/assigned parameters?
+        # # TODO: HOW DO I KNOW THAT THIS 'RUN' WORKS WITH THE arguments/assigned parameters? it's not lol
         top_level_statement = self.get_top_level_statement(method_def)
-        self.run_statement(top_level_statement)
-        
+        return self.run_statement(top_level_statement) #only statement that returns from run_statement? to return expression or nothing
+
+
 test = Interpreter()
 test.run(file_contents)
-
