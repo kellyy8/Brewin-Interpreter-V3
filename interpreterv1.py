@@ -38,8 +38,8 @@ class Interpreter(InterpreterBase):
         if result == False:
             return super().error(ErrorType.SYNTAX_ERROR, "Failed to parse file.")            #TODO: Check if this is the right ERROR_TYPE.
         else:
-            print(parsed_program)
-            print("-------------------------------------------------------------------------------------------------------------")
+            # print(parsed_program)
+            # print("-------------------------------------------------------------------------------------------------------------")
             self.__track_all_classes__(parsed_program)
             class_def = self.__find_class_definition__("main")
 
@@ -47,6 +47,7 @@ class Interpreter(InterpreterBase):
             main_class = ClassDefinition("main", class_def)
             main_obj = main_class.instantiate_object()
             main_obj.call_method("main")
+            # main_obj.run_statement(test_statement)
 
 class ClassDefinition:
     # constructor for a ClassDefinition
@@ -100,6 +101,7 @@ def evaluate_expression(expression):    #return int/string ('""')/bool constants
     for expr in reversed(expression):
         # TODO: Handle function calls & object instantiations (may return string, int, bool, or object?)
         #     elif expr[0] == 'call':
+        #         result = execute_call_statement(expression[1:]) ??
         #         itp.output("Call function.")
         #     elif expr[0] == 'new':
         #         itp.output("Instantiate new object.")
@@ -111,7 +113,7 @@ def evaluate_expression(expression):    #return int/string ('""')/bool constants
         elif expr == '!':
             op = stack.pop()
             if op!=itp.TRUE_DEF and op!=itp.FALSE_DEF:
-                itp.error(1, "Unary operations only works with boolean operands.")
+                itp.error(ErrorType.TYPE_ERROR, "Unary operations only works with boolean operands.")
             elif op==itp.TRUE_DEF:
                 stack.append(itp.FALSE_DEF)
             else:
@@ -148,19 +150,19 @@ def evaluate_expression(expression):    #return int/string ('""')/bool constants
 
             # check for type compatibility & operand compatibility
             if expr=='+' and not(type(op1)==int and type(op2)== int) and not(type(op1)==str and type(op2)==str):
-                itp.error(1, "'+' only works with integers and strings.")
+                itp.error(ErrorType.TYPE_ERROR, "'+' only works with integers and strings.")
             elif expr in math_ops and (type(op1) != int or type(op2) != int):
-                itp.error(1, "Math operations only compatible with integers.")
+                itp.error(ErrorType.TYPE_ERROR, "Math operations only compatible with integers.")
             elif expr in compare_ops:
                 if (expr in only_bool_compare_ops):
                     if not (type(op1)==bool and type(op2)==bool):
-                        itp.error(1, "Logical AND and OR operations only compatible with booleans.")
+                        itp.error(ErrorType.TYPE_ERROR, "Logical AND and OR operations only compatible with booleans.")
                 elif (expr in only_int_and_str_compare_ops):
                     if not(type(op1)==int and type(op2)==int) and not(type(op1)==str and type(op2)==str):
-                        itp.error(1, "Operands must both be integers or strings.")
+                        itp.error(ErrorType.TYPE_ERROR, "Operands must both be integers or strings.")
                 else:
                     if op1!=None and op2!=None and not(type(op1)==int and type(op2)==int) and not(type(op1)==str and type(op2)==str) and not(type(op1)==bool and type(op2)==bool):
-                        itp.error(1, "Operands must match for '==' or '!='.")
+                        itp.error(ErrorType.TYPE_ERROR, "Operands must match for '==' or '!='.")
 
             # perform math or compare operation:
             match expr:
@@ -223,18 +225,18 @@ def execute_print_statement(statement):     #not printing object refs or null
 
 class ObjectDefinition:
     def __init__(self):
-        self.my_methods = {}
-        self.my_fields = {}
+        self.my_methods = {}                                   #{'method_name' : ['params'], ['top-level statement']}
+        self.my_fields = {}                                    #{'field_name' : 'init_value' (can hold curr value later too)}
 
     # map 'method' to its 'definition'
     # TODO: Do I need a deep copy of method def? So it doesn't affect the parameters for other objects with same method? TEST
     def add_method(self, method_name, method_def):
-        self.my_methods[method_name] = method_def       #{'method_name' : ['params'], ['top-level statement']}
+        self.my_methods[method_name] = method_def
     
     # map 'field' to its 'initial value'
     # TODO: Do I need a deep copy of field names? So it doesn't affect the fields for other objects with same field names? TEST
     def add_field(self, name, init_val):
-        self.my_fields[name] = init_val                 #{'field_name' : 'init_value' (can hold curr value later too)}
+        self.my_fields[name] = init_val
 
 # IMPLEMENTed
     # Interpret the specified method using the provided parameters    
@@ -252,7 +254,11 @@ class ObjectDefinition:
     # find method's definition by method name
     # TODO: Return something else if method name not found.
     def __find_method(self, method_name):                                       # returns: [['params'], ['top-level statement']]
-        return self.my_methods[method_name]
+        itp = Interpreter()
+        method_def = self.my_methods.get(method_name)
+        if(method_def==None):
+            itp.error(ErrorType.NAME_ERROR, f"No method called {method_name}.")
+        return method_def
     
     # get top level statement (single line or 'begin' with sublines)
     def get_top_level_statement(self, method_def):
@@ -270,8 +276,8 @@ class ObjectDefinition:
             result = execute_print_statement(statement[1:])
         # elif is_an_input_statement(statement):
         #     result = self.__execute_input_statement(statement)
-        # elif is_a_call_statement(statement):
-        #     result = self.__execute_call_statement(statement)
+        elif statement[0] == itp.CALL_DEF:
+            result = self.__execute_call_statement(statement[1:])
         # elif is_a_while_statement(statement):
         #     result = self.__execute_while_statement(statement)
         # elif is_a_return_statement(statement):
@@ -294,7 +300,7 @@ class ObjectDefinition:
         # condition is not a boolean
         if(condition_result != itp.TRUE_DEF and condition_result != itp.FALSE_DEF):
             itp = Interpreter()
-            itp.error(1, "Condition of the if statement must evaluate to a boolean type.")
+            itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
         # condition passes
         elif(condition_result == itp.TRUE_DEF):
             self.run_statement(if_body)
@@ -311,8 +317,38 @@ class ObjectDefinition:
         # condition is not a boolean
         if(condition_result != itp.TRUE_DEF and condition_result != itp.FALSE_DEF):
             itp = Interpreter()
-            itp.error(1, "Condition of the if statement must evaluate to a boolean type.")
+            itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
 
+    def __execute_call_statement(self, statement):         # ['call', 'target_object', 'method_name', param1, param2, ..., paramn]
+        itp = Interpreter()
+        target_object = statement[0]
+        method_name = statement[1]
+        arguments = statement[2:]
+
+        # Use 'self' to find method or 'object reference' to get method's definition.
+        if(target_object == 'null'):                 #TODO: Check if == 'null' or == None; prolly null cus we get obj ref from eval expressions only..right?
+            itp.error(ErrorType.FAULT_ERROR, "Target object cannot be null. Must be object reference or 'me'.")
+        elif(target_object == 'me'):
+            method_def = self.__find_method(method_name)
+        #TODO: Get the object reference based on passed in name.
+        else:
+            method_def = target_object.__find_method(method_name)
+        
+        # Check if number of arguments matches number of parameters.
+        parameters = method_def[0]
+        if(len(parameters) != len(arguments)):
+            itp.error(ErrorType.TYPE_ERROR, f"You passed in {len(arguments)} argument(s) for {len(parameters)} parameter(s).")
+        # Initialize all parameters.
+        # TODO: Check pass by value effect.
+        else:
+            # map parameters to arguments (their values)
+            param_to_val = {}
+            for i in range(len(parameters)):
+                param_to_val[parameters[i]] = arguments[i]
+
+        # TODO: HOW DO I KNOW THAT THIS 'RUN' WORKS WITH THE arguments/assigned parameters?
+        top_level_statement = self.get_top_level_statement(method_def)
+        self.run_statement(top_level_statement)
         
 test = Interpreter()
 test.run(file_contents)
