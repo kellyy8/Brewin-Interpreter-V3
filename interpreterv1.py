@@ -1,7 +1,7 @@
 from intbase import InterpreterBase, ErrorType
 from bparser import BParser
 
-filename = "/Users/kellyyu/Downloads/23SP/CS131/P1/spring-23-project-starter/brew.txt"
+filename = "/Users/kellyyu/Downloads/23SP/CS131/P1/spring-23-autograder/brew.txt"
 file_object = open(filename)
 file_contents = []
 for line in file_object:
@@ -40,15 +40,14 @@ class Interpreter(InterpreterBase):
             # print(parsed_program)
             # print("-------------------------------------------------------------------------------------------------------------")
             self.__track_all_classes__(parsed_program)
-            class_def = self.__find_class_definition__("main")
+            class_def = self.__find_class_definition__(super().MAIN_CLASS_DEF)
             # if class_def is None:
             #     super().error(ErrorType.SYNTAX_ERROR, "Must have a 'main' class.")
 
             # create a "main" class --> create object of type "main" --> call object's "main" method
-            main_class = ClassDefinition("main", class_def, self)
+            main_class = ClassDefinition(super().MAIN_CLASS_DEF, class_def, self)
             main_obj = main_class.instantiate_object()
-            main_obj.call_method("main")
-            # main_obj.run_statement(test_statement)
+            main_obj.call_method(super().MAIN_FUNC_DEF)
 
 class ClassDefinition:
     # constructor for a ClassDefinition
@@ -60,11 +59,11 @@ class ClassDefinition:
         self.itp = interpreter
 
         for item in definition:
-            if item[0] == 'field':                           #{'field': ['field_name', 'init_value']}
+            if item[0] == self.itp.FIELD_DEF:                           #{'field': ['field_name', 'init_value']}
                 if(item[1] in self.my_fields):
                     self.itp.error(ErrorType.NAME_ERROR, "Fields cannot share the same name.")
                 self.my_fields[item[1]] = item[2]
-            elif item[0] == 'method':                        #{'method': ['method_name', ['params'], ['top-level statement']]}
+            elif item[0] == self.itp.METHOD_DEF:                        #{'method': ['method_name', ['params'], ['top-level statement']]}
                 if(item[1] in self.my_methods):
                     self.itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
                 self.my_methods[item[1]] = item[2:]
@@ -174,7 +173,7 @@ class ObjectDefinition:
     
     def get_const_or_var_val(self, expr, in_scope_vars):
         # if expression is a string, bool, null, or neg/pos int constant:
-        if(expr[0]=='"' or expr=='true' or expr=='false' or expr=='null' or expr=='-' or expr.isnumeric()):
+        if(expr[0]=='"' or expr==self.itp.TRUE_DEF or expr==self.itp.FALSE_DEF or expr==self.itp.NULL_DEF or expr=='-' or expr.isnumeric()):
             return expr
         # else: expression is a variable ==> retrieve and return its value IFF variable exists
         else:
@@ -346,7 +345,7 @@ class ObjectDefinition:
         # condition passes
         elif(condition_result == self.itp.TRUE_DEF):
             # HANDLE TERMINATION
-            if(if_body[0]=='return'):
+            if(if_body[0]==self.itp.RETURN_DEF):
                 return self.run_statement(if_body[0:len(if_body[0])], in_scope_vars)
             if(returned_val[1]==False):
                 return self.run_statement(if_body, in_scope_vars)
@@ -354,7 +353,7 @@ class ObjectDefinition:
         elif (len(statement)==3):
             else_body = statement[2]
             # HANDLE TERMINATION
-            if(else_body[0]=='return'):
+            if(else_body[0]==self.itp.RETURN_DEF):
                 return self.run_statement(else_body[0:len(else_body[0])], in_scope_vars)
             if(returned_val[1]==False):
                 return self.run_statement(else_body, in_scope_vars)
@@ -369,7 +368,7 @@ class ObjectDefinition:
         else:
             while(condition_result == self.itp.TRUE_DEF and returned_val[1]==False):
                 # HANDLE TERMINATION
-                if(statement[1][0]=='return'):
+                if(statement[1][0]==self.itp.RETURN_DEF):
                     return self.run_statement(statement[1][0:len(statement[1])], in_scope_vars)
                 # Inner statements could return (?, True) --> terminates while loop
                 returned_val = self.run_statement(statement[1], in_scope_vars)
@@ -385,7 +384,7 @@ class ObjectDefinition:
         returned_val = ('', False)
         for substatement in statement:
             # HANDLE TERMINATION
-            if(substatement[0]=='return'):
+            if(substatement[0]==self.itp.RETURN_DEF):
                 return self.run_statement(substatement[0:len(substatement[0])], in_scope_vars)  # sets returned_val[1] to True
             # block remaining statements; returned_val does not update (holds onto true return val)
             # outer 'begin' statements will terminate after inner statements terminated
@@ -412,9 +411,9 @@ class ObjectDefinition:
         arguments = statement[2:]
 
         # Use 'self' to find method or 'object reference' to get method's definition.
-        if(target_object == 'null'):                 #TODO: Check if == 'null' or is None; prolly null cus we get obj ref from eval expressions only..right?
+        if(target_object == self.itp.NULL_DEF):                 #TODO: Check if == 'null' or is None; prolly null cus we get obj ref from eval expressions only..right?
             self.itp.error(ErrorType.FAULT_ERROR, "Target object cannot be null. Must be object reference or 'me'.")
-        elif(target_object == 'me'):
+        elif(target_object == self.itp.ME_DEF):
             method_def = self.__find_method(method_name)
         #TODO: Get the object reference based on passed in name.
         else:
@@ -460,7 +459,7 @@ class ObjectDefinition:
         # only call statement: pass in dictionary of in_scope_vars since we may have parameters to retrieve from
         
         # HANDLE TERMINATION
-        if(top_level_statement[0]=='return'):
+        if(top_level_statement[0]==self.itp.RETURN_DEF):
             return self.run_statement(top_level_statement[0:len(top_level_statement[0])], visible_vars)
         return self.run_statement(top_level_statement, visible_vars) #only statement that returns from run_statement? to return expression or nothing
 
