@@ -399,19 +399,27 @@ class ObjectDefinition:
             self.itp.error(ErrorType.NAME_ERROR, f"No variable with the name '{var_name}'.")
             
     # TODO: Fix so it can work with fields and parameter values.
-    def __execute_call_statement(self, statement, parent_scope_vars):         # ['call', 'target_object', 'method_name', param1, param2, ..., paramn]
-        target_object = statement[0]
+    def __execute_call_statement(self, statement, parent_scope_vars):         # ['call', 'target_object', 'method_name', arg1, arg2, ..., argN]
+        target_object_name = statement[0]
         method_name = statement[1]
-        arguments = statement[2:]
 
-        # Use 'self' to find method or 'object reference' to get method's definition.
-        if(target_object == self.itp.NULL_DEF):                 #TODO: Check if == 'null' or is None; prolly null cus we get obj ref from eval expressions only..right?
-            self.itp.error(ErrorType.FAULT_ERROR, "Target object cannot be null. Must be object reference or 'me'.")
-        elif(target_object == self.itp.ME_DEF):
-            method_def = self.__find_method(method_name)
-        #TODO: Get the object reference based on passed in name.
+        # At least 1 argument passed in
+        if(len(statement) > 2):
+            arguments = statement[2:]
+        # no arguments passed in
         else:
-            method_def = target_object.__find_method(method_name)
+            arguments = []
+
+        # TODO: Check if == 'null' (or None?) retrieve obj refs stored in vars (get from expr)
+        # 'target_object_name' is either 'me' or a member variable that holds an object reference.
+        # Use 'self' to find method or retrieve 'object reference' get its method's definition.
+        if(target_object_name == self.itp.NULL_DEF):
+            self.itp.error(ErrorType.FAULT_ERROR, "Target object cannot be null. Must be object reference or 'me'.")
+        elif(target_object_name == self.itp.ME_DEF):
+            method_def = self.__find_method(method_name)
+        else:
+            target_object = self.__evaluate_expression(target_object_name, self.my_fields)  # retrieve object reference
+            method_def = target_object.__find_method(method_name)                           # use object reference
 
         # Check if method is undefined.
         if(method_def is None):
@@ -421,6 +429,7 @@ class ObjectDefinition:
         parameters = method_def[0]
         if(len(parameters) != len(arguments)):
             self.itp.error(ErrorType.TYPE_ERROR, f"You passed in {len(arguments)} argument(s) for {len(parameters)} parameter(s).")
+
         # Initialize all parameters.
         # TODO: Check pass by value effect.
         
@@ -430,32 +439,38 @@ class ObjectDefinition:
         # for i in range(len(parameters)): #accounts for shadowing
         #     method_obj.__add_variables([parameters[i]], arguments[i])
 
-        # arguments can be constants, variables, or expressions
         # evaluate with the parent's scope before creating new lexical environment
         # i think the way i am doing this will create new object references (allowing for pass by value)
         # actually idk cus doesn't it return the constant and values directly back to me (same id's)
+
+        # Arguments can be constants, variables, or expressions. Process them.
         eval_args = []
         for arg in arguments:
             eval_args.append(self.__evaluate_expression(arg, parent_scope_vars))
 
-        # map parameters to arguments values; add them to dictionary of visible variables (in-scope for method call) 
         # TODO: Consider creating Variable and Value object pairs as well to implement PBV for parameters.
         # (concerning race condition, even tho parameters are always reinitialized, if there's multithreading, parameters used for each method call should still be independent.)
         # TODO: Works for 'me', but get it to work with a target_object object reference, too.
         # TODO: Check later that I am creating a brand new dictionary for each method call.
-        visible_vars = self.my_fields
+
+        # Map parameters to arguments; add them to dictionary of visible variables (in-scope) for method call (make lex enviro)
+        # Fields are always in-scope, unless shadowed.
+        if(target_object_name == self.itp.ME_DEF):
+            visible_vars = self.my_fields
+        else:
+            visible_vars = target_object.my_fields
+
+        # Add parameters to in-scope variables. Accounts for parameters shadowing fields. 
         for i in range(len(parameters)):
-            visible_vars[parameters[i]] = eval_args[i]  #(accounts for params shadowing fields)
+            visible_vars[parameters[i]] = eval_args[i]
 
         # TODO: HOW DO I KNOW THAT THIS 'RUN' WORKS WITH THE arguments/assigned parameters?
-        # Use target_object or self to do the following cus right now it only calls self (only access to self's fields)
         top_level_statement = self.get_top_level_statement(method_def)
-        # only call statement: pass in dictionary of in_scope_vars since we may have parameters to retrieve from
         
         # HANDLE TERMINATION
         if(top_level_statement[0]==self.itp.RETURN_DEF):
             return self.__run_statement(top_level_statement[0:len(top_level_statement[0])], visible_vars)
-        return self.__run_statement(top_level_statement, visible_vars) #only statement that returns from run_statement? to return expression or nothing
+        return self.__run_statement(top_level_statement, visible_vars)
 
 
 test = Interpreter()
