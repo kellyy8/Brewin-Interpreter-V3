@@ -1,31 +1,22 @@
 from intbase import InterpreterBase, ErrorType
 from bparser import BParser
 
-filename = "/Users/kellyyu/Downloads/23SP/CS131/P1/spring-23-autograder/brew.txt"
-file_object = open(filename)
-file_contents = []
-for line in file_object:
-    file_contents.append(line)
-file_object.close()
-
-inputStrings = ""
-for item in file_contents:
-    inputStrings += item
+# TODO: Check which functions to change to private member functions later. Currently implementing some as public methods.
 
 class Interpreter(InterpreterBase):
-    def __init__(self, console_output=True, inp=None, trace_output=False):
+    def __init__(self, console_output=True, inp=None, trace_output=True):
         super().__init__(console_output, inp)   # call InterpreterBase’s constructor
         self.classes = {}
 
-    # map classes to their definitions
+    # Map classes to their definitions.
     def __track_all_classes__(self, parsed_program):
         for class_def in parsed_program:
             if class_def[1] in self.classes:
                 super().error(ErrorType.TYPE_ERROR, "Duplicate classes not allowed.")
             self.classes[class_def[1]] = class_def[2:]                                      # {'class_name' : ['class_def']}
 
-    # returns a list containing a particular class's definition
-    # TODO: Return something else if class_name is not a key (class does not exist)
+    # Returns a list containing a particular class's definition.
+    # TODO: Return something else if class_name is not a key (class does not exist) (where to handle it)
     def __find_class_definition__(self, class_name):
         return self.classes.get(class_name)                                                 # returns: ['class_def']
     
@@ -45,10 +36,16 @@ class Interpreter(InterpreterBase):
             # create a "main" class --> create object of type "main" --> call object's "main" method
             main_class = ClassDefinition(super().MAIN_CLASS_DEF, class_def, self)
             main_obj = main_class.instantiate_object()
-            main_obj.call_method(super().MAIN_FUNC_DEF)
+            main_obj.call_main_method(super().MAIN_FUNC_DEF)
+
+            # # TESTING W TEST STATEMENTS:
+            # test_statement = [['print', ['==', 'null', 'true']],
+            #       ['print', ['!=', 'null', 'true']]]
+
+            # for item in test_statement:
+            #     main_obj.run_statement(item)
 
 class ClassDefinition:
-    # constructor for a ClassDefinition
     def __init__(self, name, definition, interpreter):
         # store each class's name (help with type checking later?) & their methods (list) and fields (list)
         self.class_name = name
@@ -86,7 +83,7 @@ class VariableDefinition:
         self.variable = var
 
 class MethodDefinition:
-    # store all variables (accounts for shadowing)
+    # store all variables (accounts for shadowing...)
     def __init__(self, method_def, object):
         self.visible_variables = object.my_fields
         self.method_def = method_def
@@ -98,7 +95,6 @@ class ObjectDefinition:
     def __init__(self, interpreter):
         self.my_methods = {}                                   #{'method_name' : ['params'], ['top-level statement']}
         self.my_fields = {}                                    #{'field_name' : 'init_value' (can hold curr value later too)}
-        # self.terminate_function = False
         self.itp = interpreter
 
     # map 'method' to its 'definition'
@@ -111,34 +107,29 @@ class ObjectDefinition:
     def add_field(self, name, init_val):
         self.my_fields[name] = init_val
 
-    # Interpret the specified method using the provided parameters    
-    # TODO: I think this is just for main function
-    def call_method(self, method_name):
-        """ √ method = self.__find_method(method_name)
-            √ statement = method.get_top_level_statement()
-             result = self.__run_statement(statement)
-            √ return result """
+    # JUST FOR MAIN() IN MAIN CLASS.
+    def call_main_method(self, method_name):
         method_def = self.__find_method(method_name)
         top_level_statement = self.get_top_level_statement(method_def)
-        result = self.__run_statement(top_level_statement)
-        return result[0]
+        result = self.run_statement(top_level_statement)
+        return result[0]                                                    # Do I ever do anything with this result?
 
-    # find method's definition by method name
+    # Find method's definition by method name.
     def __find_method(self, method_name):                                  # returns: [['params'], ['top-level statement']]
         return self.my_methods.get(method_name)
     
-    # get top level statement (single line or 'begin' with sublines)
+    # Get top_level statement (single statement or 'begin' with substatements).
     def get_top_level_statement(self, method_def):
         return method_def[1]
     
     # runs/interprets the passed-in statement until completion and gets the result, if any
-    # TODO: Change all to private member functions later. Currently implementing some as public methods.
-    # in_scope_vars = self.my_fields by default --> arg passed in if there are params in addition to fields
-    def __run_statement(self, statement, in_scope_vars=None):
+    # TODO: Privatize run statement function later.
+    def run_statement(self, statement, in_scope_vars=None):
+        # in_scope_vars = self.my_fields by default --> arg passed in if there are params in addition to fields that are visible
         if(in_scope_vars is None):
             in_scope_vars = self.my_fields
         
-        # (return value, termination indicator) (return value extraced in 'call expressions')
+        # ('return value', termination indicator) ('return value' extracted in 'call expressions')
         result = ('', False)
         if statement[0] == self.itp.PRINT_DEF:
             self.__execute_print_statement(statement[1:], in_scope_vars)
@@ -151,7 +142,6 @@ class ObjectDefinition:
         elif statement[0] == self.itp.WHILE_DEF:
             result = self.__execute_while_statement(statement[1:], in_scope_vars)
         elif statement[0] == self.itp.RETURN_DEF:
-            #TODO: Must terminate function after this block.
             # HANDLE TERMINATION
             if(len(statement)==2):
                 result = self.__execute_return_statement(statement[1], in_scope_vars)
@@ -219,6 +209,13 @@ class ObjectDefinition:
             # 'unary NOT' operand
             elif expr == '!':
                 op = stack.pop()
+
+                # set up operand for nested expressions: returned value of function, variable, or constant
+                if type(op)==list:
+                    op = self.__evaluate_expression(op, in_scope_vars)
+                else:
+                    op = self.__get_const_or_var_val(op, in_scope_vars)
+
                 if op!=self.itp.TRUE_DEF and op!=self.itp.FALSE_DEF:
                     self.itp.error(ErrorType.TYPE_ERROR, "Unary operations only works with boolean operands.")
                 elif op==self.itp.TRUE_DEF:
@@ -340,18 +337,18 @@ class ObjectDefinition:
         elif(condition_result == self.itp.TRUE_DEF):
             # HANDLE TERMINATION
             if(if_body[0]==self.itp.RETURN_DEF):
-                return self.__run_statement(if_body[0:len(if_body[0])], in_scope_vars)
+                return self.run_statement(if_body[0:len(if_body[0])], in_scope_vars)
             if(returned_val[1]==False):
-                return self.__run_statement(if_body, in_scope_vars)
+                return self.run_statement(if_body, in_scope_vars)
         # condition fails and there's an else-body
         elif (len(statement)==3):
             else_body = statement[2]
             # HANDLE TERMINATION
             if(else_body[0]==self.itp.RETURN_DEF):
-                return self.__run_statement(else_body[0:len(else_body[0])], in_scope_vars)
+                return self.run_statement(else_body[0:len(else_body[0])], in_scope_vars)
             if(returned_val[1]==False):
-                return self.__run_statement(else_body, in_scope_vars)
-            return self.__run_statement(else_body, in_scope_vars)
+                return self.run_statement(else_body, in_scope_vars)
+            return self.run_statement(else_body, in_scope_vars)
 
     def __execute_while_statement(self, statement, in_scope_vars):             # [while, [condition], [body]]
         condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
@@ -363,13 +360,12 @@ class ObjectDefinition:
             while(condition_result == self.itp.TRUE_DEF and returned_val[1]==False):
                 # HANDLE TERMINATION
                 if(statement[1][0]==self.itp.RETURN_DEF):
-                    return self.__run_statement(statement[1][0:len(statement[1])], in_scope_vars)
+                    return self.run_statement(statement[1][0:len(statement[1])], in_scope_vars)
                 # Inner statements could return (?, True) --> terminates while loop
-                returned_val = self.__run_statement(statement[1], in_scope_vars)
+                returned_val = self.run_statement(statement[1], in_scope_vars)
                 condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
         return returned_val
 
-    # TODO: Test this when I get expression to work with function calls.
     def __execute_return_statement(self, statement, in_scope_vars):            # [return] or [return, [expression]]
         # HANDLE TERMINATION
         return (self.__evaluate_expression(statement, in_scope_vars), True)
@@ -379,14 +375,14 @@ class ObjectDefinition:
         for substatement in statement:
             # HANDLE TERMINATION
             if(substatement[0]==self.itp.RETURN_DEF):
-                return self.__run_statement(substatement[0:len(substatement[0])], in_scope_vars)  # sets returned_val[1] to True
+                return self.run_statement(substatement[0:len(substatement[0])], in_scope_vars)  # sets returned_val[1] to True
             # block remaining statements; returned_val does not update (holds onto true return val)
             # outer 'begin' statements will terminate after inner statements terminated
             if(returned_val[1]==False):
-                returned_val = self.__run_statement(substatement, in_scope_vars)
+                returned_val = self.run_statement(substatement, in_scope_vars)
         return returned_val
         
-    # TODO: Test if all valid values are evaluated right, and if only 1 variable is updated each time.
+    # TODO: Test if all valid values are evaluated right, and if only 1 variable is updated each time. (Pass by value effect)
     def __execute_set_statement(self, statement, in_scope_vars):               # [set, var_name, new_value]
         var_name = statement[0]
         new_val = statement[1]
@@ -398,15 +394,15 @@ class ObjectDefinition:
         else:
             self.itp.error(ErrorType.NAME_ERROR, f"No variable with the name '{var_name}'.")
             
-    # TODO: Fix so it can work with fields and parameter values.
+    # TODO: Ensure pass by value effect for object's fields & nested function call's parameters.
     def __execute_call_statement(self, statement, parent_scope_vars):         # ['call', 'target_object', 'method_name', arg1, arg2, ..., argN]
         target_object_name = statement[0]
         method_name = statement[1]
 
-        # At least 1 argument passed in
+        # At least 1 argument passed in.
         if(len(statement) > 2):
             arguments = statement[2:]
-        # no arguments passed in
+        # No arguments passed in.
         else:
             arguments = []
 
@@ -430,7 +426,6 @@ class ObjectDefinition:
         if(len(parameters) != len(arguments)):
             self.itp.error(ErrorType.TYPE_ERROR, f"You passed in {len(arguments)} argument(s) for {len(parameters)} parameter(s).")
 
-        # Initialize all parameters.
         # TODO: Check pass by value effect.
         
         # method_obj = MethodDefinition(method_def)
@@ -460,7 +455,7 @@ class ObjectDefinition:
         else:
             visible_vars = target_object.my_fields
 
-        # Add parameters to in-scope variables. Accounts for parameters shadowing fields. 
+        # Initialize and add parameters to in-scope variables. Accounts for parameters shadowing fields. 
         for i in range(len(parameters)):
             visible_vars[parameters[i]] = eval_args[i]
 
@@ -469,9 +464,20 @@ class ObjectDefinition:
         
         # HANDLE TERMINATION
         if(top_level_statement[0]==self.itp.RETURN_DEF):
-            return self.__run_statement(top_level_statement[0:len(top_level_statement[0])], visible_vars)
-        return self.__run_statement(top_level_statement, visible_vars)
+            return self.run_statement(top_level_statement[0:len(top_level_statement[0])], visible_vars)
+        return self.run_statement(top_level_statement, visible_vars)
 
+
+filename = "/Users/kellyyu/Downloads/23SP/CS131/P1/spring-23-autograder/brew.txt"
+file_object = open(filename)
+file_contents = []
+for line in file_object:
+    file_contents.append(line)
+file_object.close()
+
+inputStrings = ""
+for item in file_contents:
+    inputStrings += item
 
 test = Interpreter()
 test.run(file_contents)
