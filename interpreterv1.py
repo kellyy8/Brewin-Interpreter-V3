@@ -415,16 +415,18 @@ class ObjectDefinition:
         else:
             arguments = []
 
-        # TODO: Check if == 'null' (or None?) retrieve obj refs stored in vars (get from expr)
         # 'target_object_name' is either 'me' or a member variable that holds an object reference.
         # Use 'self' to find method or retrieve 'object reference' get its method's definition.
-        if(target_object_name == self.itp.NULL_DEF):
-            self.itp.error(ErrorType.FAULT_ERROR, "Target object cannot be 'null'. Must be object reference or 'me'.")
-        elif(target_object_name == self.itp.ME_DEF):
+        if(target_object_name == self.itp.ME_DEF):
             method_def = self.__find_method(method_name)
         else:
-            target_object = self.__evaluate_expression(target_object_name, self.my_fields)  # retrieve object reference
-            method_def = target_object.__find_method(method_name)                           # use object reference
+            # retrieve value from variable
+            target_object = self.__evaluate_expression(target_object_name, self.my_fields)
+            # check if value is an object reference
+            if(type(target_object) != ObjectDefinition):
+                self.itp.error(ErrorType.FAULT_ERROR, "Target object must be an object reference.")
+            # use object reference
+            method_def = target_object.__find_method(method_name)
 
         # Check if method is undefined.
         if(method_def is None):
