@@ -167,6 +167,21 @@ class ObjectDefinition:
                 self.itp.error(ErrorType.NAME_ERROR, f"No variable with the name '{expr}'.")
             else:
                 return val
+            
+    # Variables can hold constants and object references. 
+    def __convert_operands_from_parsed_form(self, op):
+        if (type(op) == ObjectDefinition):
+            return op
+        elif op[0] == '"':
+            return op[1:-1]
+        elif op == self.itp.TRUE_DEF:
+            return True
+        elif op == self.itp.FALSE_DEF:
+            return False
+        elif op == self.itp.NULL_DEF:
+            return None
+        else:
+            return int(op)
 
     # TODO: Test if this works with everything that uses expressions/this function.
     def __evaluate_expression(self, expression, in_scope_vars):    #return int/string ('""')/bool constants as strings, or an object reference
@@ -238,20 +253,11 @@ class ObjectDefinition:
                 else:
                     op2 = self.__get_const_or_var_val(op2, in_scope_vars)
 
-                # TODO: Account for op1 and op2 being objects. (not sure if i need to do this; it's for null vs objects)
-                # convert op1 and op2 into int, string, or bool constants, or null
-                if op1[0] == '"': op1 = op1[1:-1]
-                elif op1 == self.itp.TRUE_DEF: op1 = True
-                elif op1 == self.itp.FALSE_DEF: op1 = False
-                elif op1 == self.itp.NULL_DEF: op1 = None
-                else: op1 = int(op1)
+                # Convert op1 and op2 into int, string, or bool constants, null, or object reference.
+                op1 = self.__convert_operands_from_parsed_form(op1)
+                op2 = self.__convert_operands_from_parsed_form(op2)
 
-                if op2[0] == '"': op2 = op2[1:-1]
-                elif op2 == self.itp.TRUE_DEF: op2 = True
-                elif op2 == self.itp.FALSE_DEF: op2 = False
-                elif op2 == self.itp.NULL_DEF: op2 = None
-                else: op2 = int(op2)
-
+                # TODO: Do more test cases for incompatibilities.
                 # check for type compatibility & operand compatibility
                 if expr=='+' and not(type(op1)==int and type(op2)== int) and not(type(op1)==str and type(op2)==str):
                     self.itp.error(ErrorType.TYPE_ERROR, "'+' only works with integers and strings.")
@@ -265,8 +271,11 @@ class ObjectDefinition:
                         if not(type(op1)==int and type(op2)==int) and not(type(op1)==str and type(op2)==str):
                             self.itp.error(ErrorType.TYPE_ERROR, "Operands must both be integers or strings.")
                     else:
-                        if (op1 is not None) and (op2 is not None) and not(type(op1)==int and type(op2)==int) and not(type(op1)==str and type(op2)==str) and not(type(op1)==bool and type(op2)==bool):
-                            self.itp.error(ErrorType.TYPE_ERROR, "Operands must match for '==' or '!='.")
+                        # TODO: Do more test cases for this.
+                        # Return error if operands do not match, and neither operands are 'null'.
+                        if(type(op1)!=type(op2)):
+                            if(op1 is not None and op2 is not None):
+                                self.itp.error(ErrorType.TYPE_ERROR, "Operands must match for '==' or '!='. Null vs object reference are the only exceptions.")
 
                 # perform math or compare operation:
                 match expr:
@@ -410,7 +419,7 @@ class ObjectDefinition:
         # 'target_object_name' is either 'me' or a member variable that holds an object reference.
         # Use 'self' to find method or retrieve 'object reference' get its method's definition.
         if(target_object_name == self.itp.NULL_DEF):
-            self.itp.error(ErrorType.FAULT_ERROR, "Target object cannot be null. Must be object reference or 'me'.")
+            self.itp.error(ErrorType.FAULT_ERROR, "Target object cannot be 'null'. Must be object reference or 'me'.")
         elif(target_object_name == self.itp.ME_DEF):
             method_def = self.__find_method(method_name)
         else:
@@ -468,16 +477,16 @@ class ObjectDefinition:
         return self.run_statement(top_level_statement, visible_vars)
 
 
-filename = "/Users/kellyyu/Downloads/23SP/CS131/P1/spring-23-autograder/brew.txt"
-file_object = open(filename)
-file_contents = []
-for line in file_object:
-    file_contents.append(line)
-file_object.close()
+# filename = "/Users/kellyyu/Downloads/23SP/CS131/P1/spring-23-autograder/brew.txt"
+# file_object = open(filename)
+# file_contents = []
+# for line in file_object:
+#     file_contents.append(line)
+# file_object.close()
 
-inputStrings = ""
-for item in file_contents:
-    inputStrings += item
+# inputStrings = ""
+# for item in file_contents:
+#     inputStrings += item
 
-test = Interpreter()
-test.run(file_contents)
+# test = Interpreter()
+# test.run(file_contents)
