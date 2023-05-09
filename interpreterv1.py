@@ -4,7 +4,7 @@ from bparser import BParser
 # TODO: Check which functions to change to private member functions later. Currently implementing some as public methods.
 
 class Interpreter(InterpreterBase):
-    def __init__(self, console_output=True, inp=None, trace_output=True):
+    def __init__(self, console_output=True, inp=None, trace_output=False):
         super().__init__(console_output, inp)   # call InterpreterBase’s constructor
         self.classes = {}
 
@@ -37,13 +37,6 @@ class Interpreter(InterpreterBase):
             main_class = ClassDefinition(super().MAIN_CLASS_DEF, class_def, self)
             main_obj = main_class.instantiate_object()
             main_obj.call_main_method(super().MAIN_FUNC_DEF)
-
-            # # TESTING W TEST STATEMENTS:
-            # test_statement = [['print', ['==', 'null', 'true']],
-            #       ['print', ['!=', 'null', 'true']]]
-
-            # for item in test_statement:
-            #     main_obj.run_statement(item)
 
 class ClassDefinition:
     def __init__(self, name, definition, interpreter):
@@ -111,7 +104,7 @@ class ObjectDefinition:
     def call_main_method(self, method_name):
         method_def = self.__find_method(method_name)
         top_level_statement = self.get_top_level_statement(method_def)
-        result = self.run_statement(top_level_statement)
+        result = self.__run_statement(top_level_statement)
         return result[0]                                                    # Do I ever do anything with this result?
 
     # Find method's definition by method name.
@@ -123,8 +116,7 @@ class ObjectDefinition:
         return method_def[1]
     
     # runs/interprets the passed-in statement until completion and gets the result, if any
-    # TODO: Privatize run statement function later.
-    def run_statement(self, statement, in_scope_vars=None):
+    def __run_statement(self, statement, in_scope_vars=None):
         # in_scope_vars = self.my_fields by default --> arg passed in if there are params in addition to fields that are visible
         if(in_scope_vars is None):
             in_scope_vars = self.my_fields
@@ -318,7 +310,7 @@ class ObjectDefinition:
         for arg in statement:
             # expressions evaluating to str, int, bool values wrapped in ''
             result = self.__evaluate_expression(arg, in_scope_vars)
-            if(result[0]=='"'):
+            if(len(result)>0 and result[0]=='"'):
                 result = result[1:-1]
             output += result
         self.itp.output(output)
@@ -346,18 +338,18 @@ class ObjectDefinition:
         elif(condition_result == self.itp.TRUE_DEF):
             # HANDLE TERMINATION
             if(if_body[0]==self.itp.RETURN_DEF):
-                return self.run_statement(if_body[0:len(if_body[0])], in_scope_vars)
+                return self.__run_statement(if_body[0:len(if_body[0])], in_scope_vars)
             if(returned_val[1]==False):
-                return self.run_statement(if_body, in_scope_vars)
+                return self.__run_statement(if_body, in_scope_vars)
         # condition fails and there's an else-body
         elif (len(statement)==3):
             else_body = statement[2]
             # HANDLE TERMINATION
             if(else_body[0]==self.itp.RETURN_DEF):
-                return self.run_statement(else_body[0:len(else_body[0])], in_scope_vars)
+                return self.__run_statement(else_body[0:len(else_body[0])], in_scope_vars)
             if(returned_val[1]==False):
-                return self.run_statement(else_body, in_scope_vars)
-            return self.run_statement(else_body, in_scope_vars)
+                return self.__run_statement(else_body, in_scope_vars)
+            return self.__run_statement(else_body, in_scope_vars)
 
     def __execute_while_statement(self, statement, in_scope_vars):             # [while, [condition], [body]]
         condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
@@ -369,10 +361,14 @@ class ObjectDefinition:
             while(condition_result == self.itp.TRUE_DEF and returned_val[1]==False):
                 # HANDLE TERMINATION
                 if(statement[1][0]==self.itp.RETURN_DEF):
-                    return self.run_statement(statement[1][0:len(statement[1])], in_scope_vars)
+                    return self.__run_statement(statement[1][0:len(statement[1])], in_scope_vars)
                 # Inner statements could return (?, True) --> terminates while loop
-                returned_val = self.run_statement(statement[1], in_scope_vars)
+                returned_val = self.__run_statement(statement[1], in_scope_vars)
                 condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
+
+                # another check --> since we run and use the condition again
+                if(condition_result != self.itp.TRUE_DEF and condition_result != self.itp.FALSE_DEF):
+                    self.itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
         return returned_val
 
     def __execute_return_statement(self, statement, in_scope_vars):            # [return] or [return, [expression]]
@@ -384,14 +380,13 @@ class ObjectDefinition:
         for substatement in statement:
             # HANDLE TERMINATION
             if(substatement[0]==self.itp.RETURN_DEF):
-                return self.run_statement(substatement[0:len(substatement[0])], in_scope_vars)  # sets returned_val[1] to True
+                return self.__run_statement(substatement[0:len(substatement[0])], in_scope_vars)  # sets returned_val[1] to True
             # block remaining statements; returned_val does not update (holds onto true return val)
             # outer 'begin' statements will terminate after inner statements terminated
             if(returned_val[1]==False):
-                returned_val = self.run_statement(substatement, in_scope_vars)
+                returned_val = self.__run_statement(substatement, in_scope_vars)
         return returned_val
         
-    # TODO: Test if all valid values are evaluated right, and if only 1 variable is updated each time. (Pass by value effect)
     def __execute_set_statement(self, statement, in_scope_vars):               # [set, var_name, new_value]
         var_name = statement[0]
         new_val = statement[1]
@@ -445,18 +440,16 @@ class ObjectDefinition:
         # for i in range(len(parameters)): #accounts for shadowing
         #     method_obj.__add_variables([parameters[i]], arguments[i])
 
-        # evaluate with the parent's scope before creating new lexical environment
         # i think the way i am doing this will create new object references (allowing for pass by value)
         # actually idk cus doesn't it return the constant and values directly back to me (same id's)
 
-        # Arguments can be constants, variables, or expressions. Process them.
+        # Arguments can be constants, variables, or expressions. Process them with parent's scope before creating new lexical environment.
         eval_args = []
         for arg in arguments:
             eval_args.append(self.__evaluate_expression(arg, parent_scope_vars))
 
         # TODO: Consider creating Variable and Value object pairs as well to implement PBV for parameters.
         # (concerning race condition, even tho parameters are always reinitialized, if there's multithreading, parameters used for each method call should still be independent.)
-        # TODO: Works for 'me', but get it to work with a target_object object reference, too.
         # TODO: Check later that I am creating a brand new dictionary for each method call.
 
         # Map parameters to arguments; add them to dictionary of visible variables (in-scope) for method call (make lex enviro)
@@ -467,6 +460,8 @@ class ObjectDefinition:
             visible_vars = target_object.my_fields
 
         # Initialize and add parameters to in-scope variables. Accounts for parameters shadowing fields. 
+        # I think the parameter names are shared across all objects of same class,
+        # but this key is creating a new pool of visible variables for each method call, so PBV should still hold. 
         for i in range(len(parameters)):
             visible_vars[parameters[i]] = eval_args[i]
 
@@ -475,8 +470,8 @@ class ObjectDefinition:
         
         # HANDLE TERMINATION
         if(top_level_statement[0]==self.itp.RETURN_DEF):
-            return self.run_statement(top_level_statement[0:len(top_level_statement[0])], visible_vars)
-        return self.run_statement(top_level_statement, visible_vars)
+            return self.__run_statement(top_level_statement[0:len(top_level_statement[0])], visible_vars)
+        return self.__run_statement(top_level_statement, visible_vars)
 
 
 # filename = "/Users/kellyyu/Downloads/23SP/CS131/P1/spring-23-autograder/brew.txt"
