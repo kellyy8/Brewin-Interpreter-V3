@@ -123,7 +123,7 @@ class ObjectDefinition:
             in_scope_vars = self.my_fields
         
         # ('return value', termination indicator) ('return value' extracted in 'call expressions')
-        result = ('', False)
+        returned_val = ('', False)
         if statement[0] == self.itp.PRINT_DEF:
             self.__execute_print_statement(statement[1:], in_scope_vars)
         elif statement[0] == self.itp.INPUT_INT_DEF:
@@ -131,23 +131,23 @@ class ObjectDefinition:
         elif statement[0] == self.itp.INPUT_STRING_DEF:
             self.__execute_input_str_statement(statement[1], in_scope_vars)
         elif statement[0] == self.itp.IF_DEF:
-            result = self.__execute_if_statement(statement[1:], in_scope_vars)        
+            returned_val = self.__execute_if_statement(statement[1:], in_scope_vars)        
         elif statement[0] == self.itp.WHILE_DEF:
-            result = self.__execute_while_statement(statement[1:], in_scope_vars)
+            returned_val = self.__execute_while_statement(statement[1:], in_scope_vars)
         elif statement[0] == self.itp.RETURN_DEF:
             # HANDLE TERMINATION
             if(len(statement)==2):
-                result = self.__execute_return_statement(statement[1], in_scope_vars)
+                returned_val = self.__execute_return_statement(statement[1], in_scope_vars)
             else:
-                result = ('', True)
+                returned_val = ('', True)
         elif statement[0] == self.itp.BEGIN_DEF:
-            result = self.__execute_all_sub_statements_of_begin_statement(statement[1:], in_scope_vars)
+            returned_val = self.__execute_all_sub_statements_of_begin_statement(statement[1:], in_scope_vars)
         elif statement[0] == self.itp.SET_DEF:
             self.__execute_set_statement(statement[1:], in_scope_vars)
         elif statement[0] == self.itp.CALL_DEF:
-            result = self.__execute_call_statement(statement[1:], in_scope_vars)
+            returned_val = self.__execute_call_statement(statement[1:], in_scope_vars)
 
-        return result
+        return returned_val
     
     def __get_const_or_var_val(self, expr, in_scope_vars):
         # if expression is a string, bool, null, or neg/pos int constant:
@@ -339,23 +339,31 @@ class ObjectDefinition:
             if_body = statement[1]
             # HANDLE TERMINATION
             if(if_body[0]==self.itp.RETURN_DEF):
+                # runs return statement; returns ('' or value, True)
                 return self.__run_statement(if_body[0:len(if_body[0])], in_scope_vars)
+            # CHECK the check!
             if(returned_val[1]==False):
+                # propagates return tuple up
                 return self.__run_statement(if_body, in_scope_vars)
         # condition fails and there's an else-body
         elif (len(statement)==3):
             else_body = statement[2]
             # HANDLE TERMINATION
             if(else_body[0]==self.itp.RETURN_DEF):
+                # runs return statement; returns ('' or value, True)
                 return self.__run_statement(else_body[0:len(else_body[0])], in_scope_vars)
+            # CHECK the check!
             if(returned_val[1]==False):
+                # propagates return tuple up
                 return self.__run_statement(else_body, in_scope_vars)
 
+        # CHECK: when does returned_val get updated such that none of the return statements run? why is this needed?
         return returned_val         # ASK: Why do I need this line?
 
     def __execute_while_statement(self, statement, in_scope_vars):             # [while, [condition], [body]]
         condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
         returned_val = ('', False)
+
         # condition is not a boolean
         if(condition_result != self.itp.TRUE_DEF and condition_result != self.itp.FALSE_DEF):
             self.itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
@@ -363,14 +371,18 @@ class ObjectDefinition:
             while(condition_result == self.itp.TRUE_DEF and returned_val[1]==False):
                 # HANDLE TERMINATION
                 if(statement[1][0]==self.itp.RETURN_DEF):
+                    # runs return statement; returns ('' or value, True); terminates while loop
                     return self.__run_statement(statement[1][0:len(statement[1])], in_scope_vars)
-                # Inner statements could return (?, True) --> terminates while loop
+
+                # propagates return tuple up (after while loop is done)
                 returned_val = self.__run_statement(statement[1], in_scope_vars)
                 condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
 
                 # another check --> since we run and use the condition again
                 if(condition_result != self.itp.TRUE_DEF and condition_result != self.itp.FALSE_DEF):
                     self.itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
+        
+        # can be updated inside while loop; propagates return tuple up
         return returned_val
 
     def __execute_return_statement(self, statement, in_scope_vars):            # [return] or [return, [expression]]
@@ -382,6 +394,7 @@ class ObjectDefinition:
         for substatement in statement:
             # HANDLE TERMINATION
             if(substatement[0]==self.itp.RETURN_DEF):
+                # runs return statement; returns ('' or value, True)
                 return self.__run_statement(substatement[0:len(substatement[0])], in_scope_vars)  # sets returned_val[1] to True
             # block remaining statements; returned_val does not update (holds onto true return val)
             # outer 'begin' statements will terminate after inner statements terminated
@@ -467,7 +480,6 @@ class ObjectDefinition:
         for i in range(len(parameters)):
             visible_vars[parameters[i]] = eval_args[i]
 
-        # TODO: HOW DO I KNOW THAT THIS 'RUN' WORKS WITH THE arguments/assigned parameters?
         top_level_statement = self.get_top_level_statement(method_def)
         
         # HANDLE TERMINATION
