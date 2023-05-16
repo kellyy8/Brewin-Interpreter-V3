@@ -22,6 +22,7 @@ class Interpreter(InterpreterBase):
     
     def run(self, program):
         # parse the program into a more easily processed form
+        # print(program)
         result, parsed_program = BParser.parse(program)
         if result == False:
             return super().error(ErrorType.SYNTAX_ERROR, "Failed to parse file.")            #TODO: Check if this is the right ERROR_TYPE.
@@ -66,23 +67,23 @@ class ClassDefinition:
             obj.add_field(name, init_val)
         return obj     
 
-class ValueDefinition:
-    def __init__(self, val):
-        self.value = val
+# class ValueDefinition:
+#     def __init__(self, val):
+#         self.value = val
 
-class VariableDefinition:
-    # store 'value' objects
-    def __init__(self, var):
-        self.variable = var
+# class VariableDefinition:
+#     # store 'value' objects
+#     def __init__(self, var):
+#         self.variable = var
 
-class MethodDefinition:
-    # store all variables (accounts for shadowing...)
-    def __init__(self, method_def, object):
-        self.visible_variables = object.my_fields
-        self.method_def = method_def
+# class MethodDefinition:
+#     # store all variables (accounts for shadowing...)
+#     def __init__(self, method_def, object):
+#         self.visible_variables = object.my_fields
+#         self.method_def = method_def
 
-    def __add_variables(self, name, val):
-        self.visible_variables[name] = val
+#     def __add_variables(self, name, val):
+#         self.visible_variables[name] = val
 
 class ObjectDefinition:
     def __init__(self, interpreter):
@@ -105,7 +106,7 @@ class ObjectDefinition:
         method_def = self.__find_method(method_name)
         top_level_statement = self.get_top_level_statement(method_def)
         result = self.__run_statement(top_level_statement)
-        return result[0]                                                    # Do I ever do anything with this result?
+        return result[0]                                                    # Do I ever do anything with this result? No. Should I comment this out?
 
     # Find method's definition by method name.
     def __find_method(self, method_name):                                  # returns: [['params'], ['top-level statement']]
@@ -328,7 +329,6 @@ class ObjectDefinition:
 
     def __execute_if_statement(self, statement, in_scope_vars):            # [if, [[condition], [if-body], [else-body]]]
         condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
-        if_body = statement[1]
         returned_val = ('', False)
 
         # condition is not a boolean
@@ -336,6 +336,7 @@ class ObjectDefinition:
             self.itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
         # condition passes
         elif(condition_result == self.itp.TRUE_DEF):
+            if_body = statement[1]
             # HANDLE TERMINATION
             if(if_body[0]==self.itp.RETURN_DEF):
                 return self.__run_statement(if_body[0:len(if_body[0])], in_scope_vars)
@@ -349,7 +350,8 @@ class ObjectDefinition:
                 return self.__run_statement(else_body[0:len(else_body[0])], in_scope_vars)
             if(returned_val[1]==False):
                 return self.__run_statement(else_body, in_scope_vars)
-            return self.__run_statement(else_body, in_scope_vars)
+
+        return returned_val         # ASK: Why do I need this line?
 
     def __execute_while_statement(self, statement, in_scope_vars):             # [while, [condition], [body]]
         condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
@@ -474,16 +476,16 @@ class ObjectDefinition:
         return self.__run_statement(top_level_statement, visible_vars)
 
 
-# filename = "/Users/kellyyu/Downloads/23SP/CS131/P1/spring-23-autograder/brew.txt"
-# file_object = open(filename)
-# file_contents = []
-# for line in file_object:
-#     file_contents.append(line)
-# file_object.close()
+filename = "/Users/kellyyu/Downloads/23SP/CS131/P1/spring-23-autograder/brew.txt"
+file_object = open(filename)
+file_contents = []
+for line in file_object:
+    file_contents.append(line)
+file_object.close()
 
-# inputStrings = ""
-# for item in file_contents:
-#     inputStrings += item
+inputStrings = ""
+for item in file_contents:
+    inputStrings += item
 
-# test = Interpreter()
-# test.run(file_contents)
+test = Interpreter()
+test.run(file_contents)
