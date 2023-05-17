@@ -1,8 +1,6 @@
 from intbase import InterpreterBase, ErrorType
 from bparser import BParser
 
-# TODO: Check which functions to change to private member functions later. Currently implementing some as public methods.
-
 class Interpreter(InterpreterBase):
     def __init__(self, console_output=True, inp=None, trace_output=False):
         super().__init__(console_output, inp)   # call InterpreterBase’s constructor
@@ -22,7 +20,6 @@ class Interpreter(InterpreterBase):
     
     def run(self, program):
         # parse the program into a more easily processed form
-        # print(program)
         result, parsed_program = BParser.parse(program)
         if result == False:
             return super().error(ErrorType.SYNTAX_ERROR, "Failed to parse file.")            #TODO: Check if this is the right ERROR_TYPE.
@@ -106,7 +103,7 @@ class ObjectDefinition:
         method_def = self.__find_method(method_name)
         top_level_statement = self.get_top_level_statement(method_def)
         result = self.__run_statement(top_level_statement)
-        return result[0]                                                    # Do I ever do anything with this result? No. Should I comment this out?
+        return result[0]                                                    # Do I ever do anything with this result?
 
     # Find method's definition by method name.
     def __find_method(self, method_name):                                  # returns: [['params'], ['top-level statement']]
@@ -176,7 +173,6 @@ class ObjectDefinition:
         else:
             return int(op)
 
-    # TODO: Test if this works with everything that uses expressions/this function.
     def __evaluate_expression(self, expression, in_scope_vars):    #return int/string ('""')/bool constants as strings, or an object reference
         # expr examples = ['true'] ['num'] ['>', 'n', '0'], ['*', 'n', 'result'], ['call', 'me', 'factorial', 'num']
 
@@ -184,7 +180,6 @@ class ObjectDefinition:
         if(type(expression)!=list):
             return self.__get_const_or_var_val(expression, in_scope_vars)
         
-        # TODO: Test if expression is returned, and if its format is in parsed format. Return value must be in ''.
         # expression is function 'call' statement (funcs can return nothing or what eval_expr can return)
         if(expression[0]==self.itp.CALL_DEF):
             returned_val = self.__execute_call_statement(expression[1:], in_scope_vars)
@@ -250,7 +245,6 @@ class ObjectDefinition:
                 op1 = self.__convert_operands_from_parsed_form(op1)
                 op2 = self.__convert_operands_from_parsed_form(op2)
 
-                # TODO: Do more test cases for incompatibilities.
                 # check for type compatibility & operand compatibility
                 if expr=='+' and not(type(op1)==int and type(op2)== int) and not(type(op1)==str and type(op2)==str):
                     self.itp.error(ErrorType.TYPE_ERROR, "'+' only works with integers and strings.")
@@ -264,7 +258,6 @@ class ObjectDefinition:
                         if not(type(op1)==int and type(op2)==int) and not(type(op1)==str and type(op2)==str):
                             self.itp.error(ErrorType.TYPE_ERROR, "Operands must both be integers or strings.")
                     else:
-                        # TODO: Do more test cases for this.
                         # Return error if operands do not match, and neither operands are 'null'.
                         if(type(op1)!=type(op2)):
                             if(op1 is not None and op2 is not None):
@@ -329,7 +322,6 @@ class ObjectDefinition:
 
     def __execute_if_statement(self, statement, in_scope_vars):            # [if, [[condition], [if-body], [else-body]]]
         condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
-        returned_val = ('', False)
 
         # condition is not a boolean
         if(condition_result != self.itp.TRUE_DEF and condition_result != self.itp.FALSE_DEF):
@@ -341,9 +333,8 @@ class ObjectDefinition:
             if(if_body[0]==self.itp.RETURN_DEF):
                 # runs return statement; returns ('' or value, True)
                 return self.__run_statement(if_body[0:len(if_body[0])], in_scope_vars)
-            # CHECK the check!
-            if(returned_val[1]==False):
-                # propagates return tuple up
+            else:
+                # propagates returned_val tuple up
                 return self.__run_statement(if_body, in_scope_vars)
         # condition fails and there's an else-body
         elif (len(statement)==3):
@@ -352,13 +343,14 @@ class ObjectDefinition:
             if(else_body[0]==self.itp.RETURN_DEF):
                 # runs return statement; returns ('' or value, True)
                 return self.__run_statement(else_body[0:len(else_body[0])], in_scope_vars)
-            # CHECK the check!
-            if(returned_val[1]==False):
-                # propagates return tuple up
+            else:
+                # propagates returned_val tuple up
                 return self.__run_statement(else_body, in_scope_vars)
-
-        # CHECK: when does returned_val get updated such that none of the return statements run? why is this needed?
-        return returned_val         # ASK: Why do I need this line?
+        # condition fails and there's NO else-body
+        else:
+            # return empty string (aka nothing); if no if/else body ran, no return statement would have ran & no value returned
+            returned_val = ('', False)
+            return returned_val
 
     def __execute_while_statement(self, statement, in_scope_vars):             # [while, [condition], [body]]
         condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
@@ -374,7 +366,7 @@ class ObjectDefinition:
                     # runs return statement; returns ('' or value, True); terminates while loop
                     return self.__run_statement(statement[1][0:len(statement[1])], in_scope_vars)
 
-                # propagates return tuple up (after while loop is done)
+                # propagates returned_val tuple up (after while loop is done)
                 returned_val = self.__run_statement(statement[1], in_scope_vars)
                 condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
 
@@ -382,7 +374,8 @@ class ObjectDefinition:
                 if(condition_result != self.itp.TRUE_DEF and condition_result != self.itp.FALSE_DEF):
                     self.itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
         
-        # can be updated inside while loop; propagates return tuple up
+        # if while loop ran, propagates (possibly updated) returned_val tuple up
+        # else, the while loop returns ('', False) for sure since no return statement ran
         return returned_val
 
     def __execute_return_statement(self, statement, in_scope_vars):            # [return] or [return, [expression]]
@@ -390,16 +383,31 @@ class ObjectDefinition:
         return (self.__evaluate_expression(statement, in_scope_vars), True)
 
     def __execute_all_sub_statements_of_begin_statement(self, statement, in_scope_vars):
+        # initially returned_val[1] == False since we just entered the begin statement (no return statement could have ran)
         returned_val = ('', False)
+
         for substatement in statement:
             # HANDLE TERMINATION
             if(substatement[0]==self.itp.RETURN_DEF):
                 # runs return statement; returns ('' or value, True)
-                return self.__run_statement(substatement[0:len(substatement[0])], in_scope_vars)  # sets returned_val[1] to True
-            # block remaining statements; returned_val does not update (holds onto true return val)
-            # outer 'begin' statements will terminate after inner statements terminated
+                return self.__run_statement(substatement[0:len(substatement[0])], in_scope_vars)
+            
+            # addresses all cases where return statement is not the top-level statement (must be inside a begin statement)
+                # if return statement is top-level statement, we have handled in if, while, begin, and call already
+            # ^^ if such return statements ran, then the begin statement that contains the return statement must signal
+            # any statements wrapping that begin statement to terminate as well (by not running any further statements in their scope)
+            
+            # outer statements will terminate after inner 'begin' statement terminated
+            # returned_val[1] is set to True if inner statements ran a return statement
             if(returned_val[1]==False):
                 returned_val = self.__run_statement(substatement, in_scope_vars)
+
+            # no more statements should be ran since inner scope terminated 
+            else:
+                break
+
+        # if a nested return statement ran, propagates returned_val tuple up
+        # else, returns ('', False) for sure since no return statement ran
         return returned_val
         
     def __execute_set_statement(self, statement, in_scope_vars):               # [set, var_name, new_value]
@@ -448,23 +456,11 @@ class ObjectDefinition:
             self.itp.error(ErrorType.TYPE_ERROR, f"You passed in {len(arguments)} argument(s) for {len(parameters)} parameter(s).")
 
         # TODO: Check pass by value effect.
-        
-        # method_obj = MethodDefinition(method_def)
-        # for name, val in target_object.my_fields.items():
-        #     method_obj.__add_variables(name, val)
-        # for i in range(len(parameters)): #accounts for shadowing
-        #     method_obj.__add_variables([parameters[i]], arguments[i])
-
-        # i think the way i am doing this will create new object references (allowing for pass by value)
-        # actually idk cus doesn't it return the constant and values directly back to me (same id's)
-
         # Arguments can be constants, variables, or expressions. Process them with parent's scope before creating new lexical environment.
         eval_args = []
         for arg in arguments:
             eval_args.append(self.__evaluate_expression(arg, parent_scope_vars))
 
-        # TODO: Consider creating Variable and Value object pairs as well to implement PBV for parameters.
-        # (concerning race condition, even tho parameters are always reinitialized, if there's multithreading, parameters used for each method call should still be independent.)
         # TODO: Check later that I am creating a brand new dictionary for each method call.
 
         # Map parameters to arguments; add them to dictionary of visible variables (in-scope) for method call (make lex enviro)
