@@ -1,20 +1,51 @@
 from intbase import ErrorType
 
+
+# parser:
+# [ 'field', 'type_name', 'field_name', 'init_value']
+# [ 'method', 'return_type', 'name', [[type1, param1], [type2, param2], ..], ['top-level statement'] ]
+
 class ObjectDefinition:
-    def __init__(self, interpreter):
+    def __init__(self, interpreter, class_def):
         self.my_methods = {}                                   #{'method_name' : ['params'], ['top-level statement']}
-        self.my_fields = {}                                    #{'field_name' : 'init_value' (can hold curr value later too)}
+        self.my_fields = {}                                    #{ var_def object : value_def object }
         self.itp = interpreter
 
-    # map 'method' to its 'definition'
-    # TODO: Do I need a deep copy of method def? So it doesn't affect the parameters for other objects with same method? TEST
-    def add_method(self, method_name, method_def):
-        self.my_methods[method_name] = method_def
+        # populate object definition with class definition
+        # for name, info in self.my_fields.items():
+        #     type_name = info[0]
+        #     field_name = info[1]
+        #     init_val = info[2]
+
+        #     var = VariableDefinition(type_name, field_name)
+        #     val = ValueDefinition(type_name, init_val)
+        #     obj.add_field(var, val)
+
+        # for name, info in self.my_methods.items():
+        #     return_type = info[0]
+        #     name = info[1]
+        #     params = info[2]
+        #     statements = info[3]
+
+        #     obj.add_method(name, definition)
+
+        for item in class_def:
+            if item[0] == self.itp.FIELD_DEF:                           #{'field': ['field_name', 'init_value']}
+                if(item[1] in self.my_fields):
+                    self.itp.error(ErrorType.NAME_ERROR, "Fields cannot share the same name.")
+                self.my_fields[item[1]] = item[2]
+            elif item[0] == self.itp.METHOD_DEF:                        #{'method': ['method_name', ['params'], ['top-level statement']]}
+                if(item[1] in self.my_methods):
+                    self.itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
+                self.my_methods[item[1]] = item[2:]
+
+    # # map 'method' to its 'definition'
+    # def add_method(self, method_name, method_def):
+    #     self.my_methods[method_name] = method_def
     
-    # map 'field' to its 'initial value'
-    # TODO: Do I need a deep copy of field names? So it doesn't affect the fields for other objects with same field names? TEST
-    def add_field(self, name, init_val):
-        self.my_fields[name] = init_val
+    # # map 'field' to its 'initial value'
+    # def add_field(self, var, val):
+    #     self.my_fields[var] = val
 
     # JUST FOR MAIN() IN MAIN CLASS.
     def call_main_method(self, method_name):
@@ -109,22 +140,8 @@ class ObjectDefinition:
             if(class_def is None):
                 self.itp.error(ErrorType.TYPE_ERROR, f"No class with the name: '{expression[1]}'.")         #page 23 of spec
             
-
-            # populate new instance with info directly rather than with ClassDefinition
-            instance = ObjectDefinition(self.itp)
-
-            for item in class_def:
-                if item[0] == self.itp.FIELD_DEF:                           #{'field': ['field_name', 'init_value']}
-                    if(item[1] in instance.my_fields):
-                        self.itp.error(ErrorType.NAME_ERROR, "Fields cannot share the same name.")
-                    instance.my_fields[item[1]] = item[2]
-                elif item[0] == self.itp.METHOD_DEF:                        #{'method': ['method_name', ['params'], ['top-level statement']]}
-                    if(item[1] in instance.my_methods):
-                        self.itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
-                    instance.my_methods[item[1]] = item[2:]
-
+            instance = ObjectDefinition(self.itp, class_def)
             return instance
-
 
             # class_obj = ClassDefinition(expression[1], class_def, self.itp)
             # instance = class_obj.instantiate_object()

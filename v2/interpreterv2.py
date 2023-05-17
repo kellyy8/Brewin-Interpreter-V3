@@ -37,14 +37,6 @@ class Interpreter(InterpreterBase):
             main_obj = main_class.instantiate_object()
             main_obj.call_main_method(super().MAIN_FUNC_DEF)
 
-# class ValueDefinition:
-#     def __init__(self, val):
-#         self.value = val
-
-# class VariableDefinition:
-#     # store 'value' objects
-#     def __init__(self, var):
-#         self.variable = var
 
 # class MethodDefinition:
 #     # store all variables (accounts for shadowing...)
