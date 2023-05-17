@@ -1,86 +1,4 @@
-from intbase import InterpreterBase, ErrorType
-from bparser import BParser
-
-class Interpreter(InterpreterBase):
-    def __init__(self, console_output=True, inp=None, trace_output=False):
-        super().__init__(console_output, inp)   # call InterpreterBase’s constructor
-        self.classes = {}
-
-    # Map classes to their definitions.
-    def __track_all_classes__(self, parsed_program):
-        for class_def in parsed_program:
-            if class_def[1] in self.classes:
-                super().error(ErrorType.TYPE_ERROR, "Duplicate classes not allowed.")
-            self.classes[class_def[1]] = class_def[2:]                                      # {'class_name' : ['class_def']}
-
-    # Returns a list containing a particular class's definition.
-    # TODO: Return something else if class_name is not a key (class does not exist) (where to handle it)
-    def __find_class_definition__(self, class_name):
-        return self.classes.get(class_name)                                                 # returns: ['class_def']
-    
-    def run(self, program):
-        # parse the program into a more easily processed form
-        result, parsed_program = BParser.parse(program)
-        if result == False:
-            return super().error(ErrorType.SYNTAX_ERROR, "Failed to parse file.")            #TODO: Check if this is the right ERROR_TYPE.
-        else:
-            # print(parsed_program)
-            # print("-------------------------------------------------------------------------------------------------------------")
-            self.__track_all_classes__(parsed_program)
-            class_def = self.__find_class_definition__(super().MAIN_CLASS_DEF)
-            # if class_def is None:
-            #     super().error(ErrorType.SYNTAX_ERROR, "Must have a 'main' class.")
-
-            # create a "main" class --> create object of type "main" --> call object's "main" method
-            main_class = ClassDefinition(super().MAIN_CLASS_DEF, class_def, self)
-            main_obj = main_class.instantiate_object()
-            main_obj.call_main_method(super().MAIN_FUNC_DEF)
-
-class ClassDefinition:
-    def __init__(self, name, definition, interpreter):
-        # store each class's name (help with type checking later?) & their methods (list) and fields (list)
-        self.class_name = name
-        self.my_methods = {}
-        self.my_fields = {}
-        self.itp = interpreter
-
-        for item in definition:
-            if item[0] == self.itp.FIELD_DEF:                           #{'field': ['field_name', 'init_value']}
-                if(item[1] in self.my_fields):
-                    self.itp.error(ErrorType.NAME_ERROR, "Fields cannot share the same name.")
-                self.my_fields[item[1]] = item[2]
-            elif item[0] == self.itp.METHOD_DEF:                        #{'method': ['method_name', ['params'], ['top-level statement']]}
-                if(item[1] in self.my_methods):
-                    self.itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
-                self.my_methods[item[1]] = item[2:]
-
-    # use definition of a class to create & return an instance of object
-    # TODO: Consider instantiating a Variable and Value object when creating an instance to implement PBV.
-    def instantiate_object(self): 
-        obj = ObjectDefinition(self.itp)
-        for name, definition in self.my_methods.items():
-            obj.add_method(name, definition)
-        for name, init_val in self.my_fields.items():
-            obj.add_field(name, init_val)
-        return obj     
-
-# class ValueDefinition:
-#     def __init__(self, val):
-#         self.value = val
-
-# class VariableDefinition:
-#     # store 'value' objects
-#     def __init__(self, var):
-#         self.variable = var
-
-# class MethodDefinition:
-#     # store all variables (accounts for shadowing...)
-#     def __init__(self, method_def, object):
-#         self.visible_variables = object.my_fields
-#         self.method_def = method_def
-
-#     def __add_variables(self, name, val):
-#         self.visible_variables[name] = val
+from intbase import ErrorType
 
 class ObjectDefinition:
     def __init__(self, interpreter):
@@ -190,9 +108,27 @@ class ObjectDefinition:
             class_def = self.itp.__find_class_definition__(expression[1])
             if(class_def is None):
                 self.itp.error(ErrorType.TYPE_ERROR, f"No class with the name: '{expression[1]}'.")         #page 23 of spec
-            class_obj = ClassDefinition(expression[1], class_def, self.itp)
-            instance = class_obj.instantiate_object()
+            
+
+            # populate new instance with info directly rather than with ClassDefinition
+            instance = ObjectDefinition(self.itp)
+
+            for item in class_def:
+                if item[0] == self.itp.FIELD_DEF:                           #{'field': ['field_name', 'init_value']}
+                    if(item[1] in instance.my_fields):
+                        self.itp.error(ErrorType.NAME_ERROR, "Fields cannot share the same name.")
+                    instance.my_fields[item[1]] = item[2]
+                elif item[0] == self.itp.METHOD_DEF:                        #{'method': ['method_name', ['params'], ['top-level statement']]}
+                    if(item[1] in instance.my_methods):
+                        self.itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
+                    instance.my_methods[item[1]] = item[2:]
+
             return instance
+
+
+            # class_obj = ClassDefinition(expression[1], class_def, self.itp)
+            # instance = class_obj.instantiate_object()
+            # return instance
 
         # expression is arithmetics, concatenation, or comparison (parameter is a list)
         add_op = {'+'}
@@ -482,18 +418,3 @@ class ObjectDefinition:
         if(top_level_statement[0]==self.itp.RETURN_DEF):
             return self.__run_statement(top_level_statement[0:len(top_level_statement[0])], visible_vars)
         return self.__run_statement(top_level_statement, visible_vars)
-
-
-filename = "/Users/kellyyu/Downloads/23SP/CS131/Projects/spring-23-autograder/brew++.txt"
-file_object = open(filename)
-file_contents = []
-for line in file_object:
-    file_contents.append(line)
-file_object.close()
-
-inputStrings = ""
-for item in file_contents:
-    inputStrings += item
-
-test = Interpreter()
-test.run(file_contents)
