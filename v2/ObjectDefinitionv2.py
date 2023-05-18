@@ -135,6 +135,11 @@ class ObjectDefinition:
         elif statement[0] == self.itp.CALL_DEF:
             returned_val = self.__execute_call_statement(statement[1:], in_scope_vars)
 
+        # LOCAL VARIABLES -- LET STATEMENT
+        # TODO: Check if it should return a value.
+        elif statement[0] == self.itp.LET_DEF:
+            returned_val = self.__execute_let_statement(statement[1:], in_scope_vars)
+
         return returned_val
     
     def __get_const_or_var_val(self, expr, in_scope_vars):
@@ -242,6 +247,8 @@ class ObjectDefinition:
                 op1 = self.__convert_operands_from_parsed_form(op1)
                 op2 = self.__convert_operands_from_parsed_form(op2)
 
+
+                # TODO: Check what operands object references (classes/subclasses) are compatible with & handle polymorphism.
                 # check for type compatibility & operand compatibility
                 if expr=='+' and not(type(op1)==int and type(op2)== int) and not(type(op1)==str and type(op2)==str):
                     self.itp.error(ErrorType.TYPE_ERROR, "'+' only works with integers and strings.")
@@ -315,6 +322,7 @@ class ObjectDefinition:
         new_val = create_value_object(new_val)
         var = in_scope_vars[var_name][0]
 
+        # TYPE CHECKING ASSIGNMENTS:
         if(var.get_type() != InterpreterBase.INT_DEF):
             self.itp.error(ErrorType.TYPE_ERROR, f"Variable is of type '{var.get_type()}', not 'int'.")
         
@@ -331,6 +339,7 @@ class ObjectDefinition:
         new_val = create_value_object(new_val)
         var = in_scope_vars[var_name][0]
 
+        # TYPE CHECKING ASSIGNMENTS:
         if(var.get_type() != InterpreterBase.STRING_DEF):
             self.itp.error(ErrorType.TYPE_ERROR, f"Variable is of type '{var.get_type()}', not 'string'.")
         
@@ -445,6 +454,7 @@ class ObjectDefinition:
             var_to_update = in_scope_vars[var_name][0]
             var_to_update_type = var_to_update.get_type()
 
+            # TYPE CHECKING ASSIGNMENTS:
             # TODO: Need to handle polymorphism.
             if(new_val_type != var_to_update_type):
                 self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_to_update_type}', but value is of type '{new_val_type}'.")
@@ -506,8 +516,6 @@ class ObjectDefinition:
         eval_args = []
         for arg in arguments:
             eval_args.append(self.__evaluate_expression(arg, parent_scope_vars))
-
-        # TODO: Check later that I am creating a brand new dictionary for each method call.
 
         # Map parameters to arguments; add them to dictionary of visible variables (in-scope) for method call (make lex enviro)
         # Fields are always in-scope, unless shadowed.
