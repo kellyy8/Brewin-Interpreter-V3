@@ -44,6 +44,7 @@ class ObjectDefinition:
                         init_val = create_value_def_object(init_val)
                     
                     init_val_type = init_val.get_type()
+                    #TODO: This does not account for polymorphism yet. Not yet comparing class names if type == CLASS_DEF 
                     if(init_val_type != type_name):
                         self.itp.error(ErrorType.TYPE_ERROR, f"Field of type '{type_name}' cannot be initialized with a value of type '{init_val_type}'.")
                     else:
@@ -56,8 +57,8 @@ class ObjectDefinition:
                 # map method name to its whole definition (return, params, statements)
                 else:
                     # TODO: Update to BREWIN++ version later.
-                    # self.my_methods[method_name] = [item[1]] + item[3:]   # BREWIN++ version
-                    self.my_methods[method_name] = item[3:]                 # BREWIN version
+                    self.my_methods[method_name] = [item[1]] + item[3:]   # BREWIN++ version
+                    # self.my_methods[method_name] = item[3:]                 # BREWIN version
 
         # for name, val in self.my_fields.items():
         #     print(val.get_type(), name, "=", val.get_value())
@@ -75,13 +76,13 @@ class ObjectDefinition:
         return result[0]                                                    # Do I ever do anything with this result?
 
     # Find method's definition by method name.
-    def __find_method(self, method_name):                                  # returns: [['params'], ['top-level statement']]
+    def __find_method(self, method_name):                                  # returns: ['return_type', [[type1, param1], [type2, param2], ..], ['top-level statement']]
         return self.my_methods.get(method_name)
     
     # Get top_level statement (single statement or 'begin' with substatements).
     def get_top_level_statement(self, method_def):
-        return method_def[1]
-    
+        return method_def[2]                                                # method_def = ['return_type', [[params]], [top level statement]]
+
     # runs/interprets the passed-in statement until completion and gets the result, if any
     def __run_statement(self, statement, in_scope_vars=None):
         # in_scope_vars = self.my_fields by default --> arg passed in if there are params in addition to fields that are visible
@@ -429,12 +430,13 @@ class ObjectDefinition:
         if(method_def is None):
             self.itp.error(ErrorType.NAME_ERROR, f"Cannot find method with the name '{method_name}'.")
 
+        # method_def == ['return_type', [[type1, param1], [type2, param2], ..], ['top-level statement']]
+
         # Check if number of arguments matches number of parameters.
-        parameters = method_def[0]
+        parameters = method_def[1]
         if(len(parameters) != len(arguments)):
             self.itp.error(ErrorType.TYPE_ERROR, f"You passed in {len(arguments)} argument(s) for {len(parameters)} parameter(s).")
 
-        # TODO: Check pass by value effect.
         # Arguments can be constants, variables, or expressions. Process them with parent's scope before creating new lexical environment.
         eval_args = []
         for arg in arguments:
@@ -452,12 +454,36 @@ class ObjectDefinition:
         # Initialize and add parameters to in-scope variables. Accounts for parameters shadowing fields. 
         # I think the parameter names are shared across all objects of same class,
         # but this key is creating a new pool of visible variables for each method call, so PBV should still hold. 
+
+        # MARK
+        # Create value_def object for each value processed by evaluated expression.
+        for i in range(len(eval_args)):
+            eval_args[i] = create_value_def_object(eval_args[i])
+
+        # Append value_def object IFF its type matches parameter type. Otherwise, raise error.
         for i in range(len(parameters)):
-            visible_vars[parameters[i]] = eval_args[i]
+            param_type = parameters[i][0]
+            param_name = parameters[i][1]
+            arg_type = eval_args[i].get_type()
+            # TODO: This does not account for polymorphism yet.
+            # If param_type is not int, string, or bool, then it is a 'class name'. (CLASS_DEF)
+            # Handle int, string, bool param types:
+            if(param_type == InterpreterBase.INT_DEF or param_type == InterpreterBase.STRING_DEF or param_type == InterpreterBase.BOOL_DEF):
+                if(arg_type != param_type):
+                    self.itp.error(ErrorType.NAME_ERROR, f"Parameter of type '{param_type}' cannot be assigned to a value of type '{arg_type}'.")
+                else:
+                    visible_vars[param_name] = eval_args[i]
+            # Handle class types: (TODO: handle polymorphism here)
+            # else:
+
+        # for k,v in visible_vars.items():
+        #     print(k,":", v.get_type(), v.get_value())
 
         top_level_statement = self.get_top_level_statement(method_def)
         
         # HANDLE TERMINATION
+        # MARK
+        # Check first value of tuple (value def object) and see if its type matches return type.
         if(top_level_statement[0]==self.itp.RETURN_DEF):
             return self.__run_statement(top_level_statement[0:len(top_level_statement[0])], visible_vars)
         return self.__run_statement(top_level_statement, visible_vars)
