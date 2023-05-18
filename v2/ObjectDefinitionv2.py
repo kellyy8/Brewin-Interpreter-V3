@@ -489,6 +489,14 @@ class ObjectDefinition:
         if(len(parameters) != len(arguments)):
             self.itp.error(ErrorType.TYPE_ERROR, f"You passed in {len(arguments)} argument(s) for {len(parameters)} parameter(s).")
 
+        # TODO: Check for duplicate parameter names. Is this an error I should be checking?? Can't find it on spec.
+        unique_param_names = set()
+        for param in parameters:
+            if param[1] in unique_param_names:
+                self.itp.error(ErrorType.NAME_ERROR, f"Duplicate formal parameter name '{param[1]}'.")
+            else:
+                unique_param_names.add(param[1])
+
         # Arguments can be constants, variables, or expressions. Process them with parent's scope before creating new lexical environment.
         eval_args = []
         for arg in arguments:
@@ -545,9 +553,9 @@ class ObjectDefinition:
         # Set up default return tuples.
         return_type = method_def[0]
         if(return_type == InterpreterBase.INT_DEF):
-            default_returned_val = (0, True)
+            default_returned_val = ('0', True)
         elif(return_type == InterpreterBase.BOOL_DEF):
-            default_returned_val = (False, True)
+            default_returned_val = (InterpreterBase.FALSE_DEF, True)
         elif(return_type == InterpreterBase.STRING_DEF):
             default_returned_val = ('', True)
         # void functions return nothing (None)
