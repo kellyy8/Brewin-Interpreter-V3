@@ -29,8 +29,10 @@ class Interpreter(InterpreterBase):
             # print("-------------------------------------------------------------------------------------------------------------")
             self.__track_all_classes__(parsed_program)
             class_def = self.__find_class_definition__(super().MAIN_CLASS_DEF)
-            # if class_def is None:
-            #     super().error(ErrorType.SYNTAX_ERROR, "Must have a 'main' class.")
+
+            # TODO: Check if we need this check. Matching barista right now.
+            if class_def is None:
+                super().error(ErrorType.TYPE_ERROR, "No class named 'main' found.")
 
             # create a "main" class --> create object of type "main" --> call object's "main" method
             main_class = ClassDefinition(super().MAIN_CLASS_DEF, class_def, self)

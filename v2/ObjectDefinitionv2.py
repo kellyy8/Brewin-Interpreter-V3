@@ -84,6 +84,11 @@ class ObjectDefinition:
     # JUST FOR MAIN() IN MAIN CLASS.
     def call_main_method(self, method_name):
         method_def = self.__find_method(method_name)
+
+        # TODO: Check if this check is needed. I think so bc it's like calling any other method. Check if method exists or else name error. Matches barista right now.
+        if method_def is None:
+            self.itp.error(ErrorType.NAME_ERROR, "Cannot find method with the name 'main'.")
+
         top_level_statement = self.get_top_level_statement(method_def)
         result = self.__run_statement(top_level_statement)
         # MARK
