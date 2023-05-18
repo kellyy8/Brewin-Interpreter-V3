@@ -1,9 +1,10 @@
 from intbase import InterpreterBase
 
 class ValueDefinition:
-    def __init__(self, val, val_type, class_name=None):
-        self.value = val
+    # store 'value' objects and their type
+    def __init__(self, val_type, val, class_name=None):
         self.type = val_type
+        self.value = val
         # for object references that are not null
         self.class_name = class_name
 

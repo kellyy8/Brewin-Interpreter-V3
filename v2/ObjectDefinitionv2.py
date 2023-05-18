@@ -1,28 +1,38 @@
 from intbase import InterpreterBase, ErrorType
 from ValueDefinitionv2 import ValueDefinition
+from VariableDefinitionv2 import VariableDefinition
 
 # parser:
 # [ 'field', 'type_name', 'field_name', 'init_value']
 # [ 'method', 'return_type', 'name', [[type1, param1], [type2, param2], ..], ['top-level statement'] ]
 
-# When assigning a value to a variable (field init, param init, reassignment), use a value_def object as the value to work with.
-def create_value_def_object(val, class_name=None):
+# When assigning a value to a variable (field init, param init, reassignment), define a value_def object for the value.
+def create_value_object(val):
+    # values can be primitives (int, string, bool), object references (class/subclass), or null
     if (type(val) == ObjectDefinition):
-        return ValueDefinition(val, InterpreterBase.CLASS_DEF, val.get_object_type())
-    elif val[0] == '"':
-        return ValueDefinition(val, InterpreterBase.STRING_DEF, None)
-    elif val == InterpreterBase.TRUE_DEF or val == InterpreterBase.FALSE_DEF:
-        return ValueDefinition(val, InterpreterBase.BOOL_DEF, None)
+        return ValueDefinition(InterpreterBase.CLASS_DEF, val, val.get_object_type())
     elif val == InterpreterBase.NULL_DEF:
-        return ValueDefinition(val, InterpreterBase.CLASS_DEF, class_name)
+        return ValueDefinition(InterpreterBase.CLASS_DEF, val)
+    elif val[0] == '"':
+        return ValueDefinition(InterpreterBase.STRING_DEF, val)
+    elif val == InterpreterBase.TRUE_DEF or val == InterpreterBase.FALSE_DEF:
+        return ValueDefinition(InterpreterBase.BOOL_DEF, val)
     else:
-        return ValueDefinition(val, InterpreterBase.INT_DEF, None)
+        return ValueDefinition(InterpreterBase.INT_DEF, val)
+
+def create_var_object(var_type, var_name):
+    # variable holds primitives (int, string, bool)
+    if(var_type == InterpreterBase.INT_DEF or var_type == InterpreterBase.STRING_DEF or var_type == InterpreterBase.BOOL_DEF):
+        return VariableDefinition(var_type, var_name)
+    # variable holds object references (store class name)
+    else:
+        return VariableDefinition(InterpreterBase.CLASS_DEF, var_name, var_type)
     
 class ObjectDefinition:
     def __init__(self, interpreter, class_name, class_def):
         self.class_name = class_name
         self.my_methods = {}                                   #{ 'method_name' : 'return_type', [[type1, param1], [type2, param2], ..], ['top-level statement'] }
-        self.my_fields = {}                                    #{ 'field_name' : value_def object }
+        self.my_fields = {}                                    #{ 'field_name' : (var_def object, value_def object) }
         self.itp = interpreter
 
         # populate object definition with class definition
@@ -36,19 +46,20 @@ class ObjectDefinition:
                     self.itp.error(ErrorType.NAME_ERROR, "Fields cannot share the same name.")
                 # map field name to a value with type tag
                 else:
-                    # TYPE CHECKING FIELD INITIALIZATION: create value object & retrieve its type; store object IFF its type matches field's type
-                    # If val == 'null', val can only be updated to point object references of variable's 'type_name'
-                    if(init_val == InterpreterBase.NULL_DEF):
-                        init_val = create_value_def_object(init_val, type_name)
-                    else:
-                        init_val = create_value_def_object(init_val)
-                    
+                    # TYPE CHECKING FIELD INITIALIZATION:
+                    field_var = create_var_object(type_name, field_name)
+                    init_val = create_value_object(init_val)
+
+                    field_var_type = field_var.get_type()                       # do this because it's gonna be diff from type_name if field holds object references
                     init_val_type = init_val.get_type()
-                    #TODO: This does not account for polymorphism yet. Not yet comparing class names if type == CLASS_DEF 
+                    #TODO: This does not account for polymorphism yet. Not yet comparing class names if type == CLASS_DEF
+                    # Types (int, string, bool, class) should match.
                     if(init_val_type != type_name):
-                        self.itp.error(ErrorType.TYPE_ERROR, f"Field of type '{type_name}' cannot be initialized with a value of type '{init_val_type}'.")
+                        self.itp.error(ErrorType.TYPE_ERROR, f"Field of type '{field_var_type}' cannot be initialized with a value of type '{init_val_type}'.")
+                    # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
+                    # For fields, values are not object references. They are either constants or null.
                     else:
-                        self.my_fields[field_name] = init_val
+                        self.my_fields[field_name] = (field_var, init_val)
             
             elif item[0] == self.itp.METHOD_DEF:
                 method_name = item[2]
@@ -60,9 +71,13 @@ class ObjectDefinition:
                     self.my_methods[method_name] = [item[1]] + item[3:]   # BREWIN++ version
                     # self.my_methods[method_name] = item[3:]                 # BREWIN version
 
-        # for name, val in self.my_fields.items():
-        #     print(val.get_type(), name, "=", val.get_value())
-        # print(self.my_methods)
+
+        # print("MY FIELDS:")
+        # for k, v in self.my_fields.items():
+        #     print(k, ":", v[0].get_type(), v[0].get_name(), "= ", v[1].get_type(), v[1].get_value())
+        # print("MY METHODS:")
+        # for k, v in self.my_methods.items():
+        #     print(k, ":", v)
 
     def get_object_type(self):
         return self.class_name
@@ -394,12 +409,53 @@ class ObjectDefinition:
         var_name = statement[0]
         new_val = statement[1]
 
-        # ASSUMING in_scope_vars contains the right object references
         if var_name in in_scope_vars:
+            # evaluate new value
             new_val = self.__evaluate_expression(new_val, in_scope_vars)  # eval_expr() handles everything set receives as new_val arg
-            in_scope_vars[var_name] = new_val
+            # create val_def object for new value
+            new_val = create_value_object(new_val)
+            new_val_type = new_val.get_type()
+
+            # get variable's type
+            var_to_update = in_scope_vars[var_name][0]
+            var_to_update_type = var_to_update.get_type()
+
+            # TODO: Need to handle polymorphism.
+            if(new_val_type != var_to_update_type):
+                self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_to_update_type}', but value is of type '{new_val_type}'.")
+            elif(new_val_type == InterpreterBase.CLASS_DEF and new_val != InterpreterBase.NULL_DEF):
+                print("CHECK FOR POLYMORPHISM HERE.")
+            # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
+            else:
+                in_scope_vars[var_name] = (var_to_update, new_val)
+                print(var_to_update.get_type(), var_to_update.get_name(), "==>", new_val.get_type(), new_val.get_value())
+        # Variable not found (p1 spec).
         else:
             self.itp.error(ErrorType.NAME_ERROR, f"No variable with the name '{var_name}'.")
+        
+        # if var_name in in_scope_vars:
+        #     # evaluate new value
+        #     new_val = self.__evaluate_expression(new_val, in_scope_vars)  # eval_expr() handles everything set receives as new_val arg
+            
+        #     # get current value's type
+        #     curr_val = in_scope_vars[var_name]
+        #     curr_val_type = curr_val.get_type()
+
+        #     # If new value is 'null', variable must be of class type.
+        #     if(new_val == InterpreterBase.NULL_DEF):
+        #         if(curr_val_type != InterpreterBase.CLASS_DEF):
+        #             self.itp.error(ErrorType.TYPE_ERROR, "Variable does not hold object references. Cannot assign 'null' to it.")
+        #         else:
+        #             new_val = create_value_def_object(new_val, curr_val_type)           # retaining 'class_name' to identify the class
+        #             in_scope_vars[var_name] = new_val
+        #     else:
+        #         new_val = create_value_def_object(new_val)
+        #         new_val_type = new_val.get_type()
+
+        #         # If new value is an object (of a class type), see if new_val_type matches or is derived from curr_val_type.
+        #         # ISSUE but like if the check passes, and new_val_type is derived class, and I keep using the value's type to analyze the variable's type, 
+        #         # that means I am changing the variable's type to the subtype each time, but that's not supposed to happen.
+        #         # variable's types are bound by initialization/declaration.
             
     # TODO: Ensure pass by value effect for object's fields & nested function call's parameters.
     def __execute_call_statement(self, statement, parent_scope_vars):         # ['call', 'target_object', 'method_name', arg1, arg2, ..., argN]
@@ -446,6 +502,7 @@ class ObjectDefinition:
 
         # Map parameters to arguments; add them to dictionary of visible variables (in-scope) for method call (make lex enviro)
         # Fields are always in-scope, unless shadowed.
+        # visible_vars = (var_def object, val_def object)
         if(target_object_name == self.itp.ME_DEF):
             visible_vars = self.my_fields
         else:
@@ -457,27 +514,43 @@ class ObjectDefinition:
 
         # MARK
         # Create value_def object for each value processed by evaluated expression.
-        for i in range(len(eval_args)):
-            eval_args[i] = create_value_def_object(eval_args[i])
-
+        obj_args = []
+        for arg in eval_args:
+            obj_args.append(create_value_object(arg))
+            
         # Append value_def object IFF its type matches parameter type. Otherwise, raise error.
         for i in range(len(parameters)):
             param_type = parameters[i][0]
             param_name = parameters[i][1]
-            arg_type = eval_args[i].get_type()
-            # TODO: This does not account for polymorphism yet.
-            # If param_type is not int, string, or bool, then it is a 'class name'. (CLASS_DEF)
-            # Handle int, string, bool param types:
-            if(param_type == InterpreterBase.INT_DEF or param_type == InterpreterBase.STRING_DEF or param_type == InterpreterBase.BOOL_DEF):
-                if(arg_type != param_type):
-                    self.itp.error(ErrorType.NAME_ERROR, f"Parameter of type '{param_type}' cannot be assigned to a value of type '{arg_type}'.")
-                else:
-                    visible_vars[param_name] = eval_args[i]
-            # Handle class types: (TODO: handle polymorphism here)
-            # else:
 
+            param_var = create_var_object(param_type, param_name)
+            param_var_type = param_var.get_type()
+
+            arg_val = obj_args[i].get_value()
+            arg_type = obj_args[i].get_type()
+
+            # TODO: This does not account for polymorphism yet.
+            if(arg_type != param_var_type):
+                self.itp.error(ErrorType.NAME_ERROR, f"Parameter of type '{param_var_type}' cannot be assigned to a value of type '{arg_type}'.")
+            elif(arg_type == InterpreterBase.CLASS_DEF and arg_val != InterpreterBase.NULL_DEF):
+                print("CHECK FOR POLYMORPHISM HERE.")
+            # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
+            else:
+                visible_vars[param_name] = (param_var, obj_args[i])
+
+            # If param_type is not int, string, or bool, then it is a 'class name'. (CLASS_DEF)
+            # # Handle int, string, bool param types:
+            # if(param_type == InterpreterBase.INT_DEF or param_type == InterpreterBase.STRING_DEF or param_type == InterpreterBase.BOOL_DEF):
+            #     if(arg_type != param_type):
+            #         self.itp.error(ErrorType.NAME_ERROR, f"Parameter of type '{param_type}' cannot be assigned to a value of type '{arg_type}'.")
+            #     else:
+            #         visible_vars[param_name] = obj_args[i]
+            # # Handle class types.
+            # # else:
+
+        # print("visible vars: ")
         # for k,v in visible_vars.items():
-        #     print(k,":", v.get_type(), v.get_value())
+        #     print(k ,":", (v[0].get_type(), v[0].get_name()), "=", (v[1].get_type(), v[1].get_value()))
 
         top_level_statement = self.get_top_level_statement(method_def)
         
