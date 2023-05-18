@@ -20,6 +20,3 @@ class VariableDefinition:
 
     def get_class_name(self):
         return self.class_name
-
-
-    

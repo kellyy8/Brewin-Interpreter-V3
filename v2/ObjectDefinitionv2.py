@@ -71,7 +71,6 @@ class ObjectDefinition:
                     self.my_methods[method_name] = [item[1]] + item[3:]   # BREWIN++ version
                     # self.my_methods[method_name] = item[3:]                 # BREWIN version
 
-
         # print("MY FIELDS:")
         # for k, v in self.my_fields.items():
         #     print(k, ":", v[0].get_type(), v[0].get_name(), "= ", v[1].get_type(), v[1].get_value())
@@ -107,7 +106,7 @@ class ObjectDefinition:
         
         # ('return value', termination indicator) ('return value' extracted in 'call expressions')
         # MARK - RETURNED_VAL
-        returned_val = ('', False)
+        returned_val = (None, False)
         if statement[0] == self.itp.PRINT_DEF:
             self.__execute_print_statement(statement[1:], in_scope_vars)
         elif statement[0] == self.itp.INPUT_INT_DEF:
@@ -123,7 +122,7 @@ class ObjectDefinition:
             if(len(statement)==2):
                 returned_val = self.__execute_return_statement(statement[1], in_scope_vars)
             else:
-                returned_val = ('', True)
+                returned_val = (None, True)
         elif statement[0] == self.itp.BEGIN_DEF:
             returned_val = self.__execute_all_sub_statements_of_begin_statement(statement[1:], in_scope_vars)
         elif statement[0] == self.itp.SET_DEF:
@@ -136,15 +135,18 @@ class ObjectDefinition:
     def __get_const_or_var_val(self, expr, in_scope_vars):
         # MARK -- DEPENDS ON HOW EXPR IS PASSED IN OMG
         # if expression is a string, bool, null, or neg/pos int constant:
-        if(expr[0]=='"' or expr==self.itp.TRUE_DEF or expr==self.itp.FALSE_DEF or expr==self.itp.NULL_DEF or expr=='-' or expr.isnumeric()):
+        if(expr[0]=='"' or expr==self.itp.TRUE_DEF or expr==self.itp.FALSE_DEF or expr==self.itp.NULL_DEF or expr[0]=='-' or expr.isnumeric()):
             return expr
         # else: expression is a variable ==> retrieve and return its value IFF variable exists
         else:
-            val = in_scope_vars.get(expr)
-            if(val is None):
+            var = in_scope_vars.get(expr)
+            if(var is None):
                 self.itp.error(ErrorType.NAME_ERROR, f"No variable with the name '{expr}'.")
             else:
-                return val
+                # extract the value from value_def object
+                value_obj = var[1]
+                # print("value:", value_obj.get_value())
+                return value_obj.get_value()
             
     # Variables can hold constants and object references. 
     def __convert_operands_from_parsed_form(self, op):
@@ -183,10 +185,6 @@ class ObjectDefinition:
             
             instance = ObjectDefinition(self.itp, class_def)
             return instance
-
-            # class_obj = ClassDefinition(expression[1], class_def, self.itp)
-            # instance = class_obj.instantiate_object()
-            # return instance
 
         # expression is arithmetics, concatenation, or comparison (parameter is a list)
         add_op = {'+'}
@@ -304,16 +302,38 @@ class ObjectDefinition:
         self.itp.output(output)
     
     #ASSUMING inputi/s gets the right reference variables.
-    # TODO: Store value_def objects rather than values into variables. (Do we have to check the variable's type matches int/str?)
+    # TODO: Store value_def objects rather than values into variables. (Do we have to check the variable's type matches int/str?) No..
     def __execute_input_int_statement(self, statement, in_scope_vars):
-        var = statement
-        val = self.itp.get_input()
-        in_scope_vars[var] = val
+        var_name = statement
+        new_val = self.itp.get_input()
+
+        new_val = create_value_object(new_val)
+        var = in_scope_vars[var_name][0]
+
+        if(var.get_type() != InterpreterBase.INT_DEF):
+            self.itp.error(ErrorType.TYPE_ERROR, f"Variable is of type '{var.get_type()}', not 'int'.")
+        
+        # TODO: Check: don't we assume that input is of correct type?
+        elif(new_val.get_type() != InterpreterBase.INT_DEF):
+            self.itp.error(ErrorType.TYPE_ERROR, f"Variable expects 'int', but value is of type '{new_val.get_type()}'.")
+
+        in_scope_vars[var_name] = (var, new_val)
 
     def __execute_input_str_statement(self, statement, in_scope_vars):
-        var = statement
-        val = '"' + self.itp.get_input() + '"'
-        in_scope_vars[var] = val
+        var_name = statement
+        new_val = '"' + self.itp.get_input() + '"'
+
+        new_val = create_value_object(new_val)
+        var = in_scope_vars[var_name][0]
+
+        if(var.get_type() != InterpreterBase.STRING_DEF):
+            self.itp.error(ErrorType.TYPE_ERROR, f"Variable is of type '{var.get_type()}', not 'string'.")
+        
+        # TODO: Check: don't we assume that input is of correct type?
+        elif(new_val.get_type() != InterpreterBase.STRING_DEF):
+            self.itp.error(ErrorType.TYPE_ERROR, f"Variable expects 'string', but value is of type '{new_val.get_type()}'.")
+
+        in_scope_vars[var_name] = (var, new_val)
 
     def __execute_if_statement(self, statement, in_scope_vars):            # [if, [[condition], [if-body], [else-body]]]
         condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
@@ -344,12 +364,12 @@ class ObjectDefinition:
         # condition fails and there's NO else-body
         else:
             # return empty string (aka nothing); if no if/else body ran, no return statement would have ran & no value returned
-            returned_val = ('', False)
+            returned_val = (None, False)
             return returned_val
 
     def __execute_while_statement(self, statement, in_scope_vars):             # [while, [condition], [body]]
         condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
-        returned_val = ('', False)
+        returned_val = (None, False)
 
         # condition is not a boolean
         if(condition_result != self.itp.TRUE_DEF and condition_result != self.itp.FALSE_DEF):
@@ -379,7 +399,7 @@ class ObjectDefinition:
 
     def __execute_all_sub_statements_of_begin_statement(self, statement, in_scope_vars):
         # initially returned_val[1] == False since we just entered the begin statement (no return statement could have ran)
-        returned_val = ('', False)
+        returned_val = (None, False)
 
         for substatement in statement:
             # HANDLE TERMINATION
@@ -433,30 +453,6 @@ class ObjectDefinition:
         else:
             self.itp.error(ErrorType.NAME_ERROR, f"No variable with the name '{var_name}'.")
         
-        # if var_name in in_scope_vars:
-        #     # evaluate new value
-        #     new_val = self.__evaluate_expression(new_val, in_scope_vars)  # eval_expr() handles everything set receives as new_val arg
-            
-        #     # get current value's type
-        #     curr_val = in_scope_vars[var_name]
-        #     curr_val_type = curr_val.get_type()
-
-        #     # If new value is 'null', variable must be of class type.
-        #     if(new_val == InterpreterBase.NULL_DEF):
-        #         if(curr_val_type != InterpreterBase.CLASS_DEF):
-        #             self.itp.error(ErrorType.TYPE_ERROR, "Variable does not hold object references. Cannot assign 'null' to it.")
-        #         else:
-        #             new_val = create_value_def_object(new_val, curr_val_type)           # retaining 'class_name' to identify the class
-        #             in_scope_vars[var_name] = new_val
-        #     else:
-        #         new_val = create_value_def_object(new_val)
-        #         new_val_type = new_val.get_type()
-
-        #         # If new value is an object (of a class type), see if new_val_type matches or is derived from curr_val_type.
-        #         # ISSUE but like if the check passes, and new_val_type is derived class, and I keep using the value's type to analyze the variable's type, 
-        #         # that means I am changing the variable's type to the subtype each time, but that's not supposed to happen.
-        #         # variable's types are bound by initialization/declaration.
-            
     # TODO: Ensure pass by value effect for object's fields & nested function call's parameters.
     def __execute_call_statement(self, statement, parent_scope_vars):         # ['call', 'target_object', 'method_name', arg1, arg2, ..., argN]
         target_object_name = statement[0]
@@ -538,16 +534,6 @@ class ObjectDefinition:
             else:
                 visible_vars[param_name] = (param_var, obj_args[i])
 
-            # If param_type is not int, string, or bool, then it is a 'class name'. (CLASS_DEF)
-            # # Handle int, string, bool param types:
-            # if(param_type == InterpreterBase.INT_DEF or param_type == InterpreterBase.STRING_DEF or param_type == InterpreterBase.BOOL_DEF):
-            #     if(arg_type != param_type):
-            #         self.itp.error(ErrorType.NAME_ERROR, f"Parameter of type '{param_type}' cannot be assigned to a value of type '{arg_type}'.")
-            #     else:
-            #         visible_vars[param_name] = obj_args[i]
-            # # Handle class types.
-            # # else:
-
         # print("visible vars: ")
         # for k,v in visible_vars.items():
         #     print(k ,":", (v[0].get_type(), v[0].get_name()), "=", (v[1].get_type(), v[1].get_value()))
@@ -556,7 +542,55 @@ class ObjectDefinition:
         
         # HANDLE TERMINATION
         # MARK
-        # Check first value of tuple (value def object) and see if its type matches return type.
+        # Set up default return tuples.
+        return_type = method_def[0]
+        if(return_type == InterpreterBase.INT_DEF):
+            default_returned_val = (0, True)
+        elif(return_type == InterpreterBase.BOOL_DEF):
+            default_returned_val = (False, True)
+        elif(return_type == InterpreterBase.STRING_DEF):
+            default_returned_val = ('', True)
+        # void functions return nothing (None)
+        elif(return_type == InterpreterBase.VOID_DEF):
+            default_returned_val = (None, True)
+        # otherwise, return type is a class
+        else:
+            default_returned_val = (InterpreterBase.NULL_DEF, True)
+
+        # store possible return value
+        returned_val = (None, False)
         if(top_level_statement[0]==self.itp.RETURN_DEF):
-            return self.__run_statement(top_level_statement[0:len(top_level_statement[0])], visible_vars)
-        return self.__run_statement(top_level_statement, visible_vars)
+            returned_val = self.__run_statement(top_level_statement[0:len(top_level_statement[0])], visible_vars)
+        else:
+            returned_val = self.__run_statement(top_level_statement, visible_vars)
+
+        # either return returned_val or default_returned_val
+        # if non-void functions:
+        if(return_type != InterpreterBase.VOID_DEF):
+            # do not run return statement or do not return a value (no return expression):
+            if(returned_val[1] == False or returned_val[0] == None):
+                return default_returned_val
+            # does return a value --> check compatible type
+            else:
+                val = create_value_object(returned_val[0])
+                val_type = val.get_type()
+
+                # if return value is an object reference or null:
+                if(val_type == InterpreterBase.CLASS_DEF):
+                    if(val == InterpreterBase.NULL_DEF):
+                        return (val.get_value(), True)
+                    else:
+                        print("Handle polymorphism here.")
+                # else return value is a primitve 
+                else:
+                    # if primitive types don't match, output error
+                    if(val_type != return_type):
+                        self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
+                    else:
+                        return (val.get_value(), True)
+        # void function should not return value
+        else:
+            if(returned_val[0] != None):
+                self.itp.error(ErrorType.TYPE_ERROR, "Void functions should not return any values.")
+            else:
+                return default_returned_val                 # set up to be (None, True) if function is void-type
