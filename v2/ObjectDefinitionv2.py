@@ -104,10 +104,10 @@ class ObjectDefinition:
 
     # runs/interprets the passed-in statement until completion and gets the result, if any
     def __run_statement(self, statement, in_scope_vars=None):
-        # in_scope_vars = self.my_fields by default --> arg passed in if there are params in addition to fields that are visible
+        # in_scope_vars = [self.my_fields] by default --> arg passed in if there are params in addition to fields that are visible
         # MARK
         if(in_scope_vars is None):
-            in_scope_vars = self.my_fields
+            in_scope_vars = [self.my_fields]
         
         # ('return value', termination indicator) ('return value' extracted in 'call expressions')
         # MARK - RETURNED_VAL
@@ -149,14 +149,18 @@ class ObjectDefinition:
             return expr
         # else: expression is a variable ==> retrieve and return its value IFF variable exists
         else:
-            var = in_scope_vars.get(expr)
-            if(var is None):
-                self.itp.error(ErrorType.NAME_ERROR, f"No variable with the name '{expr}'.")
-            else:
-                # extract the value from value_def object
-                value_obj = var[1]
-                # print("value:", value_obj.get_value())
-                return value_obj.get_value()
+            # LIFO; search from most recently added dictionary
+            for i in range(len(in_scope_vars)-1, -1, -1):
+                scope_dict = in_scope_vars[i]
+                var = scope_dict.get(expr)
+                if(var is not None):
+                    # extract the value from value_def object & return it; ends loop and function (no error)
+                    value_obj = var[1]
+                    # print("value:", value_obj.get_value())
+                    return value_obj.get_value()
+            
+            # this line only runs if we searched through each scope dictionary and did not find variable with such name
+            self.itp.error(ErrorType.NAME_ERROR, f"No variable with the name '{expr}'.")
             
     # Variables can hold constants and object references. 
     def __convert_operands_from_parsed_form(self, op):
@@ -320,8 +324,18 @@ class ObjectDefinition:
         new_val = self.itp.get_input()
 
         new_val = create_value_object(new_val)
-        var = in_scope_vars[var_name][0]
 
+        # ASSUMING that var_name is valid (there is a variable with that name for sure)
+        # grab var_def object for type checking --> LIFO; search from most recently added dictionary
+        which_dict = None
+        for i in range(len(in_scope_vars)-1, -1, -1):
+            scope_dict = in_scope_vars[i]
+            var = scope_dict.get(var_name)          # var = (var_def object, val_def object)
+            if(var is not None):
+                # grab var_def object and break out of loop
+                var = var[0]
+                which_dict = i
+        
         # TYPE CHECKING ASSIGNMENTS:
         if(var.get_type() != InterpreterBase.INT_DEF):
             self.itp.error(ErrorType.TYPE_ERROR, f"Variable is of type '{var.get_type()}', not 'int'.")
@@ -330,14 +344,25 @@ class ObjectDefinition:
         elif(new_val.get_type() != InterpreterBase.INT_DEF):
             self.itp.error(ErrorType.TYPE_ERROR, f"Variable expects 'int', but value is of type '{new_val.get_type()}'.")
 
-        in_scope_vars[var_name] = (var, new_val)
+        # update var_def object with val_def object
+        in_scope_vars[which_dict][var_name] = (var, new_val)
 
     def __execute_input_str_statement(self, statement, in_scope_vars):
         var_name = statement
         new_val = '"' + self.itp.get_input() + '"'
 
         new_val = create_value_object(new_val)
-        var = in_scope_vars[var_name][0]
+
+        # ASSUMING that var_name is valid (there is a variable with that name for sure)
+        # grab var_def object for type checking --> LIFO; search from most recently added dictionary
+        which_dict = None
+        for i in range(len(in_scope_vars)-1, -1, -1):
+            scope_dict = in_scope_vars[i]
+            var = scope_dict.get(var_name)          # var = (var_def object, val_def object)
+            if(var is not None):
+                # grab var_def object and break out of loop
+                var = var[0]
+                which_dict = i
 
         # TYPE CHECKING ASSIGNMENTS:
         if(var.get_type() != InterpreterBase.STRING_DEF):
@@ -347,7 +372,8 @@ class ObjectDefinition:
         elif(new_val.get_type() != InterpreterBase.STRING_DEF):
             self.itp.error(ErrorType.TYPE_ERROR, f"Variable expects 'string', but value is of type '{new_val.get_type()}'.")
 
-        in_scope_vars[var_name] = (var, new_val)
+        # update var_def object with val_def object
+        in_scope_vars[which_dict][var_name] = (var, new_val)
 
     def __execute_if_statement(self, statement, in_scope_vars):            # [if, [[condition], [if-body], [else-body]]]
         condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
@@ -443,30 +469,41 @@ class ObjectDefinition:
         var_name = statement[0]
         new_val = statement[1]
 
-        if var_name in in_scope_vars:
-            # evaluate new value
-            new_val = self.__evaluate_expression(new_val, in_scope_vars)  # eval_expr() handles everything set receives as new_val arg
-            # create val_def object for new value
-            new_val = create_value_object(new_val)
-            new_val_type = new_val.get_type()
+        # LIFO; search from most recently added dictionary
+        which_dict = None
+        for i in range(len(in_scope_vars)-1, -1, -1):
+            scope_dict = in_scope_vars[i]
+            var = scope_dict.get(var_name)              # var = (var_def object, val_def object)
+            
+            # if variable exists:
+            if (var is not None):
+                which_dict = i
+                # evaluate new value
+                new_val = self.__evaluate_expression(new_val, in_scope_vars)  # eval_expr() handles everything set receives as new_val arg
+                # create val_def object for new value
+                new_val = create_value_object(new_val)
+                new_val_type = new_val.get_type()
 
-            # get variable's type
-            var_to_update = in_scope_vars[var_name][0]
-            var_to_update_type = var_to_update.get_type()
+                # get variable's type (use var_def object)
+                var_to_update = var[0]
+                var_to_update_type = var_to_update.get_type()
 
-            # TYPE CHECKING ASSIGNMENTS:
-            # TODO: Need to handle polymorphism.
-            if(new_val_type != var_to_update_type):
-                self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_to_update_type}', but value is of type '{new_val_type}'.")
-            elif(new_val_type == InterpreterBase.CLASS_DEF and new_val != InterpreterBase.NULL_DEF):
-                print("CHECK FOR POLYMORPHISM HERE.")
-            # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
-            else:
-                in_scope_vars[var_name] = (var_to_update, new_val)
-                print(var_to_update.get_type(), var_to_update.get_name(), "==>", new_val.get_type(), new_val.get_value())
-        # Variable not found (p1 spec).
-        else:
-            self.itp.error(ErrorType.NAME_ERROR, f"No variable with the name '{var_name}'.")
+                # TYPE CHECKING ASSIGNMENTS:
+                # TODO: Need to handle polymorphism.
+                if(new_val_type != var_to_update_type):
+                    self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_to_update_type}', but value is of type '{new_val_type}'.")
+                elif(new_val_type == InterpreterBase.CLASS_DEF and new_val != InterpreterBase.NULL_DEF):
+                    print("CHECK FOR POLYMORPHISM HERE.")
+                    # return
+                # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
+                else:
+                    # if it type checking passes, update the variable & return from function (don't run error statement)
+                    in_scope_vars[which_dict][var_name] = (var_to_update, new_val)
+                    print(var_to_update.get_type(), var_to_update.get_name(), "==>", new_val.get_type(), new_val.get_value())
+                    return
+    
+        # this line only runs if the variable is not found (did not end & return from the loop early)
+        self.itp.error(ErrorType.NAME_ERROR, f"No variable with the name '{var_name}'.")
         
     # TODO: Ensure pass by value effect for object's fields & nested function call's parameters.
     def __execute_call_statement(self, statement, parent_scope_vars):         # ['call', 'target_object', 'method_name', arg1, arg2, ..., argN]
@@ -519,11 +556,10 @@ class ObjectDefinition:
 
         # Map parameters to arguments; add them to dictionary of visible variables (in-scope) for method call (make lex enviro)
         # Fields are always in-scope, unless shadowed.
-        # visible_vars = (var_def object, val_def object)
         if(target_object_name == self.itp.ME_DEF):
-            visible_vars = self.my_fields
+            call_scope_vars = self.my_fields
         else:
-            visible_vars = target_object.my_fields
+            call_scope_vars = target_object.my_fields
 
         # Initialize and add parameters to in-scope variables. Accounts for parameters shadowing fields. 
         # I think the parameter names are shared across all objects of same class,
@@ -553,10 +589,14 @@ class ObjectDefinition:
                 print("CHECK FOR POLYMORPHISM HERE.")
             # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
             else:
-                visible_vars[param_name] = (param_var, obj_args[i])
+                call_scope_vars[param_name] = (param_var, obj_args[i])
+
+        
+        # CREATE LEXICAL ENVIRONMENT: START WITH STACK CONTAINING DICTIONARY CONTAINING FIELDS & PARAMS
+        in_scope_vars = [call_scope_vars]
 
         # print("visible vars: ")
-        # for k,v in visible_vars.items():
+        # for k,v in call_scope_vars.items():
         #     print(k ,":", (v[0].get_type(), v[0].get_name()), "=", (v[1].get_type(), v[1].get_value()))
 
         top_level_statement = self.get_top_level_statement(method_def)
@@ -581,9 +621,9 @@ class ObjectDefinition:
         # store possible return value
         returned_val = (None, False)
         if(top_level_statement[0]==self.itp.RETURN_DEF):
-            returned_val = self.__run_statement(top_level_statement[0:len(top_level_statement[0])], visible_vars)
+            returned_val = self.__run_statement(top_level_statement[0:len(top_level_statement[0])], in_scope_vars)
         else:
-            returned_val = self.__run_statement(top_level_statement, visible_vars)
+            returned_val = self.__run_statement(top_level_statement, in_scope_vars)
 
         # either return returned_val or default_returned_val
         # if non-void functions:
