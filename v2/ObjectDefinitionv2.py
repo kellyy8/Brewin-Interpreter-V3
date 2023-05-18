@@ -386,7 +386,7 @@ class ObjectDefinition:
             if_body = statement[1]
             # HANDLE TERMINATION
             if(if_body[0]==self.itp.RETURN_DEF):
-                # runs return statement; returns ('' or value, True)
+                # runs return statement; returns (None or value, True)
                 return self.__run_statement(if_body[0:len(if_body[0])], in_scope_vars)
             else:
                 # propagates returned_val tuple up
@@ -396,7 +396,7 @@ class ObjectDefinition:
             else_body = statement[2]
             # HANDLE TERMINATION
             if(else_body[0]==self.itp.RETURN_DEF):
-                # runs return statement; returns ('' or value, True)
+                # runs return statement; returns (None or value, True)
                 return self.__run_statement(else_body[0:len(else_body[0])], in_scope_vars)
             else:
                 # propagates returned_val tuple up
@@ -418,7 +418,7 @@ class ObjectDefinition:
             while(condition_result == self.itp.TRUE_DEF and returned_val[1]==False):
                 # HANDLE TERMINATION
                 if(statement[1][0]==self.itp.RETURN_DEF):
-                    # runs return statement; returns ('' or value, True); terminates while loop
+                    # runs return statement; returns (None or value, True); terminates while loop
                     return self.__run_statement(statement[1][0:len(statement[1])], in_scope_vars)
 
                 # propagates returned_val tuple up (after while loop is done)
@@ -430,7 +430,7 @@ class ObjectDefinition:
                     self.itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
         
         # if while loop ran, propagates (possibly updated) returned_val tuple up
-        # else, the while loop returns ('', False) for sure since no return statement ran
+        # else, the while loop returns (None, False) for sure since no return statement ran
         return returned_val
 
     def __execute_return_statement(self, statement, in_scope_vars):            # [return] or [return, [expression]]
@@ -444,7 +444,7 @@ class ObjectDefinition:
         for substatement in statement:
             # HANDLE TERMINATION
             if(substatement[0]==self.itp.RETURN_DEF):
-                # runs return statement; returns ('' or value, True)
+                # runs return statement; returns (None or value, True)
                 return self.__run_statement(substatement[0:len(substatement[0])], in_scope_vars)
             
             # addresses all cases where return statement is not the top-level statement (must be inside a begin statement)
@@ -462,7 +462,7 @@ class ObjectDefinition:
                 break
 
         # if a nested return statement ran, propagates returned_val tuple up
-        # else, returns ('', False) for sure since no return statement ran
+        # else, returns (None, False) for sure since no return statement ran
         return returned_val
         
     def __execute_set_statement(self, statement, in_scope_vars):               # [set, var_name, new_value]
@@ -655,3 +655,47 @@ class ObjectDefinition:
                 self.itp.error(ErrorType.TYPE_ERROR, "Void functions should not return any values.")
             else:
                 return default_returned_val                 # set up to be (None, True) if function is void-type
+
+    def __execute_let_statement(self, statement, in_scope_vars):            # ['let', [[type_name, var_name, init_val], [], ..], [statements]]
+        local_vars = statement[0]
+        substatements = statement[1:]
+
+        local_dict = {}                             # [ 'var_name' : (var_def obj, val_def obj) ]
+        for loc in local_vars:
+            type_name = loc[0]
+            var_name = loc[1]
+            init_val = loc[2]
+
+            if (var_name in local_dict):
+                self.itp.error(ErrorType.NAME_ERROR, "No duplicate named local variables.")
+            else:
+                var_obj = create_var_object(type_name, var_name)
+                val_obj = create_value_object(init_val)
+                local_dict[var_name] = (var_obj, val_obj)
+
+        # add this dictionary to in_scope_vars
+        # does not modify original dictionary in outer 'let' statements
+        # so, once we return to outer 'let' statements, their pool of variables would not have this newly appended dict
+        in_scope_vars = in_scope_vars + [local_dict]
+
+        # run the substatements with this pool of variables (similar to begin statement)
+        # initially returned_val[1] == False since we just started the 'let' statement (no return statement could have ran)
+        returned_val = (None, False)
+
+        for sub in substatements:
+            # HANDLE TERMINATION
+            if(sub[0]==self.itp.RETURN_DEF):
+                # runs return statement; returns (None or value, True)
+                return self.__run_statement(sub[0:len(sub[0])], in_scope_vars)
+            
+            # returned_val[1] is set to True if inner statements ran a return statement
+            if(returned_val[1]==False):
+                returned_val = self.__run_statement(sub, in_scope_vars)
+
+            # no more statements should be ran since inner scope terminated 
+            else:
+                break
+
+        # if a nested return statement ran, propagates returned_val tuple up
+        # else, returns (None, False) for sure since no return statement ran
+        return returned_val
