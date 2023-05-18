@@ -1,7 +1,7 @@
 from intbase import ErrorType
 from ObjectDefinitionv2 import ObjectDefinition
-from VariableDefinitionv2 import VariableDefinition
-from ValueDefinitionv2 import ValueDefinition
+# from VariableDefinitionv2 import VariableDefinition
+# from ValueDefinitionv2 import ValueDefinition
 
 class ClassDefinition:
     def __init__(self, name, definition, interpreter):
@@ -27,7 +27,7 @@ class ClassDefinition:
     # TODO: Consider instantiating a Variable and Value object when creating an instance to implement PBV.
     def instantiate_object(self): 
         # PBV: create new 'object definition' object each time; each object populated with own fields and methods dict
-        obj = ObjectDefinition(self.itp, self.definition)
+        obj = ObjectDefinition(self.itp, self.class_name, self.definition)
         # for name, info in self.my_fields.items():
         #     type_name = info[0]
         #     field_name = info[1]

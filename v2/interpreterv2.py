@@ -47,16 +47,16 @@ class Interpreter(InterpreterBase):
 #     def __add_variables(self, name, val):
 #         self.visible_variables[name] = val
 
-# filename = "/Users/kellyyu/Downloads/23SP/CS131/Projects/spring-23-autograder/brew++.txt"
-# file_object = open(filename)
-# file_contents = []
-# for line in file_object:
-#     file_contents.append(line)
-# file_object.close()
+filename = "/Users/kellyyu/Downloads/23SP/CS131/Projects/spring-23-autograder/brew++.txt"
+file_object = open(filename)
+file_contents = []
+for line in file_object:
+    file_contents.append(line)
+file_object.close()
 
-# inputStrings = ""
-# for item in file_contents:
-#     inputStrings += item
+inputStrings = ""
+for item in file_contents:
+    inputStrings += item
 
-# test = Interpreter()
-# test.run(file_contents)
+test = Interpreter()
+test.run(file_contents)

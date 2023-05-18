@@ -1,51 +1,54 @@
 from intbase import ErrorType
-
+# from VariableDefinitionv2 import VariableDefinition
+from ValueDefinitionv2 import ValueDefinition
 
 # parser:
 # [ 'field', 'type_name', 'field_name', 'init_value']
 # [ 'method', 'return_type', 'name', [[type1, param1], [type2, param2], ..], ['top-level statement'] ]
 
 class ObjectDefinition:
-    def __init__(self, interpreter, class_def):
-        self.my_methods = {}                                   #{'method_name' : ['params'], ['top-level statement']}
-        self.my_fields = {}                                    #{ var_def object : value_def object }
+    def __init__(self, interpreter, class_name, class_def):
+        self.class_name = class_name
+        self.my_methods = {}                                   #{ 'method_name' : 'return_type', [[type1, param1], [type2, param2], ..], ['top-level statement'] }
+        self.my_fields = {}                                    #{ 'field_name' : value_def object }
         self.itp = interpreter
 
         # populate object definition with class definition
-        # for name, info in self.my_fields.items():
-        #     type_name = info[0]
-        #     field_name = info[1]
-        #     init_val = info[2]
-
-        #     var = VariableDefinition(type_name, field_name)
-        #     val = ValueDefinition(type_name, init_val)
-        #     obj.add_field(var, val)
-
-        # for name, info in self.my_methods.items():
-        #     return_type = info[0]
-        #     name = info[1]
-        #     params = info[2]
-        #     statements = info[3]
-
-        #     obj.add_method(name, definition)
-
         for item in class_def:
-            if item[0] == self.itp.FIELD_DEF:                           #{'field': ['field_name', 'init_value']}
-                if(item[1] in self.my_fields):
-                    self.itp.error(ErrorType.NAME_ERROR, "Fields cannot share the same name.")
-                self.my_fields[item[1]] = item[2]
-            elif item[0] == self.itp.METHOD_DEF:                        #{'method': ['method_name', ['params'], ['top-level statement']]}
-                if(item[1] in self.my_methods):
-                    self.itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
-                self.my_methods[item[1]] = item[2:]
+            if item[0] == self.itp.FIELD_DEF:
+                type_name = item[1]
+                field_name = item[2]
+                init_val = item[3]
 
-    # # map 'method' to its 'definition'
-    # def add_method(self, method_name, method_def):
-    #     self.my_methods[method_name] = method_def
-    
-    # # map 'field' to its 'initial value'
-    # def add_field(self, var, val):
-    #     self.my_fields[var] = val
+                if(field_name in self.my_fields):
+                    self.itp.error(ErrorType.NAME_ERROR, "Fields cannot share the same name.")
+                # map field name to a value with type tag
+                else:
+                    # TYPE CHECKING FIELD INITIALIZATION: create value object & retrieve its type; store object IFF its type matches field's type
+                    init_val = ValueDefinition(init_val)
+                    inti_val_type = init_val.get_type()
+                    if(inti_val_type != type_name):
+                        self.itp.error(ErrorType.TYPE_ERROR, f"Field of type '{type_name}' cannot be initialized with a value of type '{inti_val_type}'.")
+                    else:
+                        self.my_fields[field_name] = init_val
+            
+            elif item[0] == self.itp.METHOD_DEF:
+                method_name = item[2]
+                if(method_name in self.my_methods):
+                    self.itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
+                # map method name to its whole definition (return, params, statements)
+                else:
+                    # TODO: Update to BREWIN++ version later.
+                    # self.my_methods[method_name] = [item[1]] + item[3:]   # BREWIN++ version
+                    self.my_methods[method_name] = item[3:]                 # BREWIN version
+
+
+        # for name, val in self.my_fields.items():
+        #     print(val.get_type(), name, "=", val.get_value())
+        # print(self.my_methods)
+
+    def get_type(self):
+        return self.class_name
 
     # JUST FOR MAIN() IN MAIN CLASS.
     def call_main_method(self, method_name):
