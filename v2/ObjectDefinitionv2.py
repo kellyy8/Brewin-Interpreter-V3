@@ -1,11 +1,23 @@
-from intbase import ErrorType
-# from VariableDefinitionv2 import VariableDefinition
+from intbase import InterpreterBase, ErrorType
 from ValueDefinitionv2 import ValueDefinition
 
 # parser:
 # [ 'field', 'type_name', 'field_name', 'init_value']
 # [ 'method', 'return_type', 'name', [[type1, param1], [type2, param2], ..], ['top-level statement'] ]
 
+# When assigning a value to a variable (field init, param init, reassignment), use a value_def object as the value to work with.
+def create_value_def_object(val, class_name=None):
+    if (type(val) == ObjectDefinition):
+        return ValueDefinition(val, InterpreterBase.CLASS_DEF, val.get_object_type())
+    elif val[0] == '"':
+        return ValueDefinition(val, InterpreterBase.STRING_DEF, None)
+    elif val == InterpreterBase.TRUE_DEF or val == InterpreterBase.FALSE_DEF:
+        return ValueDefinition(val, InterpreterBase.BOOL_DEF, None)
+    elif val == InterpreterBase.NULL_DEF:
+        return ValueDefinition(val, InterpreterBase.CLASS_DEF, class_name)
+    else:
+        return ValueDefinition(val, InterpreterBase.INT_DEF, None)
+    
 class ObjectDefinition:
     def __init__(self, interpreter, class_name, class_def):
         self.class_name = class_name
@@ -25,10 +37,15 @@ class ObjectDefinition:
                 # map field name to a value with type tag
                 else:
                     # TYPE CHECKING FIELD INITIALIZATION: create value object & retrieve its type; store object IFF its type matches field's type
-                    init_val = ValueDefinition(init_val)
-                    inti_val_type = init_val.get_type()
-                    if(inti_val_type != type_name):
-                        self.itp.error(ErrorType.TYPE_ERROR, f"Field of type '{type_name}' cannot be initialized with a value of type '{inti_val_type}'.")
+                    # If val == 'null', val can only be updated to point object references of variable's 'type_name'
+                    if(init_val == InterpreterBase.NULL_DEF):
+                        init_val = create_value_def_object(init_val, type_name)
+                    else:
+                        init_val = create_value_def_object(init_val)
+                    
+                    init_val_type = init_val.get_type()
+                    if(init_val_type != type_name):
+                        self.itp.error(ErrorType.TYPE_ERROR, f"Field of type '{type_name}' cannot be initialized with a value of type '{init_val_type}'.")
                     else:
                         self.my_fields[field_name] = init_val
             
@@ -42,12 +59,11 @@ class ObjectDefinition:
                     # self.my_methods[method_name] = [item[1]] + item[3:]   # BREWIN++ version
                     self.my_methods[method_name] = item[3:]                 # BREWIN version
 
-
         # for name, val in self.my_fields.items():
         #     print(val.get_type(), name, "=", val.get_value())
         # print(self.my_methods)
 
-    def get_type(self):
+    def get_object_type(self):
         return self.class_name
 
     # JUST FOR MAIN() IN MAIN CLASS.
@@ -55,6 +71,7 @@ class ObjectDefinition:
         method_def = self.__find_method(method_name)
         top_level_statement = self.get_top_level_statement(method_def)
         result = self.__run_statement(top_level_statement)
+        # MARK
         return result[0]                                                    # Do I ever do anything with this result?
 
     # Find method's definition by method name.
@@ -68,10 +85,12 @@ class ObjectDefinition:
     # runs/interprets the passed-in statement until completion and gets the result, if any
     def __run_statement(self, statement, in_scope_vars=None):
         # in_scope_vars = self.my_fields by default --> arg passed in if there are params in addition to fields that are visible
+        # MARK
         if(in_scope_vars is None):
             in_scope_vars = self.my_fields
         
         # ('return value', termination indicator) ('return value' extracted in 'call expressions')
+        # MARK - RETURNED_VAL
         returned_val = ('', False)
         if statement[0] == self.itp.PRINT_DEF:
             self.__execute_print_statement(statement[1:], in_scope_vars)
@@ -99,6 +118,7 @@ class ObjectDefinition:
         return returned_val
     
     def __get_const_or_var_val(self, expr, in_scope_vars):
+        # MARK -- DEPENDS ON HOW EXPR IS PASSED IN OMG
         # if expression is a string, bool, null, or neg/pos int constant:
         if(expr[0]=='"' or expr==self.itp.TRUE_DEF or expr==self.itp.FALSE_DEF or expr==self.itp.NULL_DEF or expr=='-' or expr.isnumeric()):
             return expr
@@ -112,6 +132,7 @@ class ObjectDefinition:
             
     # Variables can hold constants and object references. 
     def __convert_operands_from_parsed_form(self, op):
+        # MARK -- DEPENDS ON HOW OP IS PASSED IN.
         if (type(op) == ObjectDefinition):
             return op
         elif op[0] == '"':
@@ -125,6 +146,7 @@ class ObjectDefinition:
         else:
             return int(op)
 
+    # MARK
     def __evaluate_expression(self, expression, in_scope_vars):    #return int/string ('""')/bool constants as strings, or an object reference
         # expr examples = ['true'] ['num'] ['>', 'n', '0'], ['*', 'n', 'result'], ['call', 'me', 'factorial', 'num']
 
@@ -266,6 +288,7 @@ class ObjectDefinition:
         self.itp.output(output)
     
     #ASSUMING inputi/s gets the right reference variables.
+    # TODO: Store value_def objects rather than values into variables. (Do we have to check the variable's type matches int/str?)
     def __execute_input_int_statement(self, statement, in_scope_vars):
         var = statement
         val = self.itp.get_input()
