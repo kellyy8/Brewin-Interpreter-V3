@@ -582,6 +582,7 @@ class ObjectDefinition:
             arg_val = obj_args[i].get_value()
             arg_type = obj_args[i].get_type()
 
+            # TYPE CHECKING PARAMETER INITIALIZATION / TYPE CHECKING ASSIGNMENTS:
             # TODO: This does not account for polymorphism yet.
             if(arg_type != param_var_type):
                 self.itp.error(ErrorType.NAME_ERROR, f"Parameter of type '{param_var_type}' cannot be assigned to a value of type '{arg_type}'.")
@@ -669,9 +670,24 @@ class ObjectDefinition:
             if (var_name in local_dict):
                 self.itp.error(ErrorType.NAME_ERROR, "No duplicate named local variables.")
             else:
-                var_obj = create_var_object(type_name, var_name)
-                val_obj = create_value_object(init_val)
-                local_dict[var_name] = (var_obj, val_obj)
+                # TODO: TYPE CHECKING ASSIGNMENTS:
+                var = create_var_object(type_name, var_name)
+                val = create_value_object(init_val)
+
+                var_type = var.get_type()
+                val_type = val.get_type()
+
+                # TODO: Need to handle polymorphism.
+                if(val_type != var_type):
+                    self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_type}', but value is of type '{val_type}'.")
+                elif(val_type == InterpreterBase.CLASS_DEF and val != InterpreterBase.NULL_DEF):
+                    print("CHECK FOR POLYMORPHISM HERE.")
+                    # return
+                # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
+                else:
+                    # if it type checking passes, update the variable & return from function (don't run error statement)
+                    local_dict[var_name] = (var, val)
+                    # print(var.get_type(), var.get_name(), "==>", val.get_type(), val.get_value())
 
         # add this dictionary to in_scope_vars
         # does not modify original dictionary in outer 'let' statements
