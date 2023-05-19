@@ -197,7 +197,7 @@ class ObjectDefinition:
             if(class_def is None):
                 self.itp.error(ErrorType.TYPE_ERROR, f"No class with the name: '{expression[1]}'.")         #page 23 of spec
             
-            instance = ObjectDefinition(self.itp, class_def)
+            instance = ObjectDefinition(self.itp, expression[1],class_def)
             return instance
 
         # expression is arithmetics, concatenation, or comparison (parameter is a list)
