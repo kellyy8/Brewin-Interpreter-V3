@@ -54,7 +54,7 @@ class ObjectDefinition:
                     init_val_type = init_val.get_type()
                     #TODO: This does not account for polymorphism yet. Not yet comparing class names if type == CLASS_DEF
                     # Types (int, string, bool, class) should match.
-                    if(init_val_type != type_name):
+                    if(init_val_type != field_var_type):
                         self.itp.error(ErrorType.TYPE_ERROR, f"Field of type '{field_var_type}' cannot be initialized with a value of type '{init_val_type}'.")
                     # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
                     # For fields, values are not object references. They are either constants or null.
