@@ -69,12 +69,12 @@ class ObjectDefinition:
                 else:
                     self.my_methods[method_name] = [item[1]] + item[3:]   # BREWIN++ version
 
-        print("MY FIELDS:")
-        for k, v in self.my_fields.items():
-            print(k, ":", v[0].get_type(), v[0].get_name(), "= ", v[1].get_type(), v[1].get_value())
-        print("MY METHODS:")
-        for k, v in self.my_methods.items():
-            print(k, ":", v)
+        # print("MY FIELDS:")
+        # for k, v in self.my_fields.items():
+        #     print(k, ":", v[0].get_type(), v[0].get_name(), "= ", v[1].get_type(), v[1].get_value())
+        # print("MY METHODS:")
+        # for k, v in self.my_methods.items():
+        #     print(k, ":", v)
 
     def get_object_type(self):
         return self.class_name
@@ -514,7 +514,7 @@ class ObjectDefinition:
                 else:
                     # if it type checking passes, update the variable & return from function (don't run error statement)
                     in_scope_vars[which_dict][var_name] = (var_to_update, new_val)
-                    print(var_to_update.get_type(), var_to_update.get_name(), "==>", new_val.get_type(), new_val.get_value())
+                    # print(var_to_update.get_type(), var_to_update.get_name(), "==>", new_val.get_type(), new_val.get_value())
                     return
     
         # this line only runs if the variable is not found (did not end & return from the loop early)
@@ -628,28 +628,34 @@ class ObjectDefinition:
         top_level_statement = self.get_top_level_statement(method_def)
         
         # HANDLE TERMINATION
-        # MARK
-        # Set up default return tuples.
-        return_type = method_def[0]
-        if(return_type == InterpreterBase.INT_DEF):
-            default_returned_val = ('0', True)
-        elif(return_type == InterpreterBase.BOOL_DEF):
-            default_returned_val = (InterpreterBase.FALSE_DEF, True)
-        elif(return_type == InterpreterBase.STRING_DEF):
-            default_returned_val = ('', True)
-        # void functions return nothing (None)
-        elif(return_type == InterpreterBase.VOID_DEF):
-            default_returned_val = (None, True)
-        # otherwise, return type is a class
-        else:
-            default_returned_val = (InterpreterBase.NULL_DEF, True)
-
         # store possible return value
         returned_val = (None, False)
         if(top_level_statement[0]==self.itp.RETURN_DEF):
             returned_val = self.__run_statement(top_level_statement[0:len(top_level_statement[0])], in_scope_vars)
         else:
             returned_val = self.__run_statement(top_level_statement, in_scope_vars)
+
+        # Based on whether or not a return statement ran, we set the second element of all possible return tuples.
+        # Still need to keep this 'status' consistent to terminate functions if nested statements terminated early.
+        return_status = returned_val[1]
+
+        # MARK
+        # Set up default return tuples.
+        # Only VOID functions do not return a value (just return statement, no return expression).
+        # All other functions return a value (return statement with return expression).
+        return_type = method_def[0]
+        if(return_type == InterpreterBase.INT_DEF):
+            default_returned_val = ('0', return_status)
+        elif(return_type == InterpreterBase.BOOL_DEF):
+            default_returned_val = (InterpreterBase.FALSE_DEF, return_status)
+        elif(return_type == InterpreterBase.STRING_DEF):
+            default_returned_val = ('', return_status)
+        # void functions return nothing (None, False)
+        elif(return_type == InterpreterBase.VOID_DEF):
+            default_returned_val = (None, return_status)
+        # otherwise, return type is a class
+        else:
+            default_returned_val = (InterpreterBase.NULL_DEF, return_status)
 
         # either return returned_val or default_returned_val
         # if non-void functions:
@@ -667,7 +673,7 @@ class ObjectDefinition:
                     if(val_type != return_type):
                         self.itp.error(ErrorType.NAME_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
                     else:
-                        return (val.get_value(), True)
+                        return (val.get_value(), return_status)
                 # Object reference/class return type.
                 else:
                     # if: value is not an object reference, then error.
@@ -676,7 +682,7 @@ class ObjectDefinition:
 
                     # if: value == null or is an object reference of class type == return type, then return value.
                     if(val == InterpreterBase.NULL_DEF or val.get_class_name() == return_type):
-                        return (val.get_value(), True)
+                        return (val.get_value(), return_status)
                     # elif: value's type is a subclass of return type, return value.
                     # elif ():
                     # HANDLE POLYMORPHISM HERE.
