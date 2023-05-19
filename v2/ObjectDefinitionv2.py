@@ -248,7 +248,7 @@ class ObjectDefinition:
                 op1 = self.__convert_operands_from_parsed_form(op1)
                 op2 = self.__convert_operands_from_parsed_form(op2)
 
-
+                # TYPE CHECKING: ASSIGNMENTS/COMPARISONS
                 # check for type compatibility & operand compatibility
                 if expr=='+' and not(type(op1)==int and type(op2)== int) and not(type(op1)==str and type(op2)==str):
                     self.itp.error(ErrorType.TYPE_ERROR, "'+' only works with integers and strings.")
@@ -496,21 +496,27 @@ class ObjectDefinition:
                 # TODO: Need to handle polymorphism.
                 if(new_val_type != var_to_update_type):
                     self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_to_update_type}', but value is of type '{new_val_type}'.")
-                elif(new_val_type == InterpreterBase.CLASS_DEF and new_val != InterpreterBase.NULL_DEF):
+                elif(new_val_type == InterpreterBase.CLASS_DEF):
+                    # Null can be assigned to any variables holding any type of object reference.
+                    if(new_val.get_value() == InterpreterBase.NULL_DEF):
+                        in_scope_vars[which_dict][var_name] = (var_to_update, new_val)
+                        return
+                    
                     # if: variable and value are of the same class type.
                     if(new_val.get_class_name() == var_to_update.get_class_name()):
                         in_scope_vars[which_dict][var_name] = (var_to_update, new_val)
                         # idk = self.my_fields['p']
                         # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
                         return
+                    
                     # elif: value's class is derived from of variable's class
-                    elif True:
-                        print("SET STATEMENT -- CHECK FOR POLYMORPHISM HERE. (subclassing)")
-                        return
+                    # elif True:
+                    #     print("SET STATEMENT -- CHECK FOR POLYMORPHISM HERE. (subclassing)")
+                    #     return
                     # else: error
                     else:
-                        set.itp.error(ErrorType.TYPE_ERROR, f"'{new_val_type}' is not the same as or derived from class '{var_to_update_type}'.")
-                # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
+                        self.itp.error(ErrorType.TYPE_ERROR, f"'{new_val_type}' is not the same as or derived from class '{var_to_update_type}'.")
+                # Otherwise, value is primitive or null.
                 else:
                     # if it type checking passes, update the variable & return from function (don't run error statement)
                     in_scope_vars[which_dict][var_name] = (var_to_update, new_val)
@@ -601,9 +607,13 @@ class ObjectDefinition:
             # TODO: This does not account for polymorphism yet.
             if(arg_type != param_var_type):
                 self.itp.error(ErrorType.NAME_ERROR, f"Parameter of type '{param_var_type}' cannot be assigned to a value of type '{arg_type}'.")
-            elif(arg_type == InterpreterBase.CLASS_DEF and arg_val != InterpreterBase.NULL_DEF):
+            elif(arg_type == InterpreterBase.CLASS_DEF):
+                # Null can be assigned to any variables holding any type of object reference.
+                if(arg_val == InterpreterBase.NULL_DEF):
+                    call_scope_vars[param_name] = (param_var, obj_args[i])
+
                 # if: variable and value are of the same class type.
-                if(arg_val.get_class_name() == param_var.get_class_name()):
+                elif(arg_val.get_class_name() == param_var.get_class_name()):
                     call_scope_vars[param_name] = (param_var, obj_args[i])
                     # idk = self.my_fields[param_name]
                     # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
@@ -719,18 +729,21 @@ class ObjectDefinition:
                 # TODO: Need to handle polymorphism.
                 if(val_type != var_type):
                     self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_type}', but value is of type '{val_type}'.")
-                elif(val_type == InterpreterBase.CLASS_DEF and val != InterpreterBase.NULL_DEF):
+                elif(val_type == InterpreterBase.CLASS_DEF):
+                    # Null can be assigned to any variables holding any type of object reference.
+                    if(var.get_value() == InterpreterBase.NULL_DEF):
+                        local_dict[var_name] = (var, val)
                     # if: variable and value are of the same class type.
-                    if(val.get_class_name() == var.get_class_name()):
+                    elif(val.get_class_name() == var.get_class_name()):
                         local_dict[var_name] = (var, val)
                         # idk = self.my_fields[var_name]
                         # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
                     # elif: value's class is derived from of variable's class
-                    elif True:
-                        print("LET STATEMENT -- CHECK FOR POLYMORPHISM HERE.")
+                    # elif True:
+                    #     print("LET STATEMENT -- CHECK FOR POLYMORPHISM HERE.")
                     # else: error
                     else:
-                        set.itp.error(ErrorType.TYPE_ERROR, f"'{new_val_type}' is not the same as or derived from class '{var_to_update_type}'.")
+                        set.itp.error(ErrorType.TYPE_ERROR, f"'{val_type}' is not the same as or derived from class '{var_type}'.")
                 # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
                 else:
                     # if it type checking passes, update the variable & return from function (don't run error statement)
