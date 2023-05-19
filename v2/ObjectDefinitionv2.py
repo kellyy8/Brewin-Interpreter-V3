@@ -67,9 +67,7 @@ class ObjectDefinition:
                     self.itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
                 # map method name to its whole definition (return, params, statements)
                 else:
-                    # TODO: Update to BREWIN++ version later.
                     self.my_methods[method_name] = [item[1]] + item[3:]   # BREWIN++ version
-                    # self.my_methods[method_name] = item[3:]                 # BREWIN version
 
         print("MY FIELDS:")
         for k, v in self.my_fields.items():
@@ -136,7 +134,6 @@ class ObjectDefinition:
             returned_val = self.__execute_call_statement(statement[1:], in_scope_vars)
 
         # LOCAL VARIABLES -- LET STATEMENT
-        # TODO: Check if it should return a value.
         elif statement[0] == self.itp.LET_DEF:
             returned_val = self.__execute_let_statement(statement[1:], in_scope_vars)
 
@@ -252,12 +249,13 @@ class ObjectDefinition:
                 op2 = self.__convert_operands_from_parsed_form(op2)
 
 
-                # TODO: Check what operands object references (classes/subclasses) are compatible with & handle polymorphism.
                 # check for type compatibility & operand compatibility
                 if expr=='+' and not(type(op1)==int and type(op2)== int) and not(type(op1)==str and type(op2)==str):
                     self.itp.error(ErrorType.TYPE_ERROR, "'+' only works with integers and strings.")
                 elif expr in math_ops and (type(op1) != int or type(op2) != int):
                     self.itp.error(ErrorType.TYPE_ERROR, "Math operations only compatible with integers.")
+
+                # TODO: Object references (classes/subclasses) are compatible with == and !=. HANDLE POLYMORPHISM HERE.
                 elif expr in compare_ops:
                     if (expr in only_bool_compare_ops):
                         if not (type(op1)==bool and type(op2)==bool):
@@ -270,7 +268,13 @@ class ObjectDefinition:
                         if(type(op1)!=type(op2)):
                             if(op1 is not None and op2 is not None):
                                 self.itp.error(ErrorType.TYPE_ERROR, "Operands must match for '==' or '!='. Null vs object reference are the only exceptions.")
-
+                        # Types match. If operands are object references, check that their class types match or are related (subclass).
+                        elif(type(op1)==ObjectDefinition):
+                            # if class types do not match & classes are not related (subclass; polymorphism) --> error
+                            # TODO: HANDLE POLYMORPHISM HERE. CHECK THAT CLASSES ARE RELATED
+                            if(op1.get_object_type() != op2.get_object_type()):
+                                self.itp.error(ErrorType.TYPE_ERROR, "Operands are object references are not of same or related class types.")
+                
                 # perform math or compare operation:
                 match expr:
                     # returns string or integer values
@@ -534,7 +538,7 @@ class ObjectDefinition:
             method_def = self.__find_method(method_name)
         else:
             # retrieve value from variable
-            target_object = self.__evaluate_expression(target_object_name, self.my_fields)
+            target_object = self.__evaluate_expression(target_object_name, [self.my_fields])
             # check if value is an object reference
             if(type(target_object) != ObjectDefinition):
                 self.itp.error(ErrorType.FAULT_ERROR, "Target object must be an object reference.")
@@ -604,11 +608,11 @@ class ObjectDefinition:
                     # idk = self.my_fields[param_name]
                     # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
                 # elif: value's class is derived from of variable's class
-                elif True:
-                    print("CALL STATEMENT -- CHECK FOR POLYMORPHISM HERE.")
+                # elif True:
+                #     print("CALL STATEMENT -- CHECK FOR POLYMORPHISM HERE.")
                 # else: error
                 else:
-                    set.itp.error(ErrorType.TYPE_ERROR, f"'{new_val_type}' is not the same as or derived from class '{var_to_update_type}'.")
+                    set.itp.error(ErrorType.TYPE_ERROR, f"'{arg_val.get_class_name()}' is not the same as or derived from class '{param_var.get_class_name()}'.")
             # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
             else:
                 call_scope_vars[param_name] = (param_var, obj_args[i])
@@ -658,19 +662,27 @@ class ObjectDefinition:
                 val = create_value_object(returned_val[0])
                 val_type = val.get_type()
 
-                # if return value is an object reference or null:
-                if(val_type == InterpreterBase.CLASS_DEF):
-                    if(val == InterpreterBase.NULL_DEF):
-                        return (val.get_value(), True)
-                    else:
-                        print("Handle polymorphism here.")
-                # else return value is a primitve 
-                else:
-                    # if primitive types don't match, output error
+                # Primitive return type.
+                if(return_type == InterpreterBase.INT_DEF or return_type == InterpreterBase.STRING_DEF or return_type == InterpreterBase.BOOL_DEF):
                     if(val_type != return_type):
-                        self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
+                        self.itp.error(ErrorType.NAME_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
                     else:
                         return (val.get_value(), True)
+                # Object reference/class return type.
+                else:
+                    # if: value is not an object reference, then error.
+                    if(val_type != InterpreterBase.CLASS_DEF):
+                        self.itp.error(ErrorType.NAME_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
+
+                    # if: value == null or is an object reference of class type == return type, then return value.
+                    if(val == InterpreterBase.NULL_DEF or val.get_class_name() == return_type):
+                        return (val.get_value(), True)
+                    # elif: value's type is a subclass of return type, return value.
+                    # elif ():
+                    # HANDLE POLYMORPHISM HERE.
+                    # else: error
+                    else:
+                        self.itp.error(ErrorType.NAME_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val.get_class_name()}'.")
         # void function should not return value
         else:
             if(returned_val[0] != None):
