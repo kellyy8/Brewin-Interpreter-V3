@@ -625,7 +625,7 @@ class ObjectDefinition:
                 #     print("CALL STATEMENT -- CHECK FOR POLYMORPHISM HERE.")
                 # else: error
                 else:
-                    set.itp.error(ErrorType.NAME_ERROR, f"'{obj_args[i].get_class_name()}' is not the same as or derived from class '{param_var.get_class_name()}'.")
+                    self.itp.error(ErrorType.NAME_ERROR, f"'{obj_args[i].get_class_name()}' is not the same as or derived from class '{param_var.get_class_name()}'.")
             # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
             else:
                 call_scope_vars[param_name] = (param_var, obj_args[i])
@@ -663,7 +663,7 @@ class ObjectDefinition:
             default_returned_val = (InterpreterBase.FALSE_DEF, return_status)
         elif(return_type == InterpreterBase.STRING_DEF):
             default_returned_val = ('', return_status)
-        # void functions return nothing (None, False)
+        # void functions return nothing (None)
         elif(return_type == InterpreterBase.VOID_DEF):
             default_returned_val = (None, return_status)
         # otherwise, return type is a class
@@ -673,10 +673,10 @@ class ObjectDefinition:
         # either return returned_val or default_returned_val
         # if non-void functions:
         if(return_type != InterpreterBase.VOID_DEF):
-            # do not run return statement or do not return a value (no return expression):
+            # DOES NOT run return statement or do not return a value (no return expression):
             if(returned_val[1] == False or returned_val[0] == None):
                 return default_returned_val
-            # does return a value --> check compatible type
+            # DOES return a value --> check compatible type
             else:
                 val = create_value_object(returned_val[0])
                 val_type = val.get_type()
@@ -735,7 +735,7 @@ class ObjectDefinition:
                     self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_type}', but value is of type '{val_type}'.")
                 elif(val_type == InterpreterBase.CLASS_DEF):
                     # Null can be assigned to any variables holding any type of object reference.
-                    if(var.get_value() == InterpreterBase.NULL_DEF):
+                    if(val.get_value() == InterpreterBase.NULL_DEF):
                         local_dict[var_name] = (var, val)
                     # if: variable and value are of the same class type.
                     elif(val.get_class_name() == var.get_class_name()):
@@ -747,7 +747,7 @@ class ObjectDefinition:
                     #     print("LET STATEMENT -- CHECK FOR POLYMORPHISM HERE.")
                     # else: error
                     else:
-                        set.itp.error(ErrorType.TYPE_ERROR, f"'{val_type}' is not the same as or derived from class '{var_type}'.")
+                        self.itp.error(ErrorType.TYPE_ERROR, f"'{val_type}' is not the same as or derived from class '{var_type}'.")
                 # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
                 else:
                     # if it type checking passes, update the variable & return from function (don't run error statement)
