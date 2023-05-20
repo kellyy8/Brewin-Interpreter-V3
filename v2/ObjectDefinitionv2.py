@@ -28,14 +28,43 @@ def create_var_object(var_type, var_name):
     else:
         return VariableDefinition(InterpreterBase.CLASS_DEF, var_name, var_type)
 
-# 
+# method_def = ['return_type', 'name', [[type1, param1], [type2, param2], ..], ['top-level statement']]
+# signature: "return_type method_name $num_params param1_type param2_type ... "
+
+# TODO: FOR FUNTION OVERLOADING / OVERRIDING. Check if return type is needed to differentiate between methods.
+def create_method_type_signature(method_def):
+    return_type = method_def[0]
+    method_name = method_def[1]
+    params_list = method_def[2]
+    
+    signature = return_type + " " + method_name + " " + str(len(params_list)) + " "
+
+    for param in params_list:
+        param_type = param[0]
+        signature += param_type + " "
+
+    return signature
 
 class ObjectDefinition:
-    def __init__(self, interpreter, class_name, class_def):
+    def __init__(self, interpreter, class_name, class_def_tuple):
         self.class_name = class_name
-        self.my_methods = {}                                   #{ 'method_name' : 'return_type', [[type1, param1], [type2, param2], ..], ['top-level statement'] }
-        self.my_fields = {}                                    #{ 'field_name' : (var_def object, value_def object) }
+        self.my_methods = {}                             #{ 'method_name' : 'return_type', [[type1, param1], [type2, param2], ..], ['top-level statement'] }
+        self.my_fields = {}                              #{ 'field_name' : (var_def object, value_def object) }
         self.itp = interpreter
+
+        # INHERITANCE
+        # class_def_tuple = ( 'parent'/None, ['class_def'])
+        self.parent_name = class_def_tuple[0]
+        class_def = class_def_tuple[1]
+
+        # INHERITANCE: RECURSIVE INDUCTION ==> INSTANTIATE PARENT OBJECT
+        if self.parent_name is None:
+            self.parent_obj = None
+        else:
+            class_def_tuple = self.itp.__find_class_definition__(self.parent_name)
+            if(class_def_tuple is None):
+                super().error(ErrorType.TYPE_ERROR, f"No class named '{self.parent_name}' is found.")             # TODO: Check if error catch is needed.
+            self.parent_obj = ObjectDefinition(self.itp, self.parent_name, class_def_tuple)
 
         # populate object definition with class definition
         for item in class_def:
@@ -69,14 +98,18 @@ class ObjectDefinition:
                     self.itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
                 # map method name to its whole definition (return, params, statements)
                 else:
-                    self.my_methods[method_name] = [item[1]] + item[3:]   # BREWIN++ version
+                    method_def = [item[1]] + item[3:]
+                    signature = create_method_type_signature(item[1:4])
+                    self.my_methods[method_name] = (signature, method_def)  # BREWIN++ version
 
         # print("MY FIELDS:")
         # for k, v in self.my_fields.items():
         #     print(k, ":", v[0].get_type(), v[0].get_name(), "= ", v[1].get_type(), v[1].get_value())
         # print("MY METHODS:")
         # for k, v in self.my_methods.items():
-        #     print(k, ":", v)
+        #     print(k, ":", v[1], "==>", v[2])
+        # print("MY PARENT OBJECT")
+        # print(self.my_parent_name, ": " self.my_parent_obj)
 
     def get_object_type(self):
         return self.class_name
@@ -94,9 +127,19 @@ class ObjectDefinition:
         # MARK
         return result[0]                                                    # Do I ever do anything with this result?
 
+    # TODO: HANDLE FUNCTION OVERLOADING HERE. USE TYPE SIGNATURE TO SEARCH FOR THE RIGHT METHOD_DEF TO RETURN.
+    # Call statement uses the returned method_def. New scope would still only be the current object's fields & method's params.
+    # So, current object is not messing with the private fields of its superclasses.
     # Find method's definition by method name.
     def __find_method(self, method_name):                                  # returns: ['return_type', [[type1, param1], [type2, param2], ..], ['top-level statement']]
-        return self.my_methods.get(method_name)
+        # While there is a parent class, search through each class level's methods.
+        # If method is found, break out of loop.
+        # If loop ends without finding a method, the return value will be None (default by setting return value to result of dict search).
+        method_def_tuple = self.my_methods.get(method_name)
+        if(method_def_tuple is None):
+            return None
+        else:
+            return method_def_tuple[1]
     
     # Get top_level statement (single statement or 'begin' with substatements).
     def get_top_level_statement(self, method_def):
@@ -192,11 +235,11 @@ class ObjectDefinition:
         
         # expression is 'new' object instantiation
         if(expression[0]==self.itp.NEW_DEF):                         # [new, class_name]
-            class_def = self.itp.__find_class_definition__(expression[1])
-            if(class_def is None):
+            class_def_tuple = self.itp.__find_class_definition__(expression[1])
+            if(class_def_tuple is None):
                 self.itp.error(ErrorType.TYPE_ERROR, f"No class with the name: '{expression[1]}'.")         #page 23 of spec
             
-            instance = ObjectDefinition(self.itp, expression[1],class_def)
+            instance = ObjectDefinition(self.itp, expression[1],class_def_tuple)
             return instance
 
         # expression is arithmetics, concatenation, or comparison (parameter is a list)
