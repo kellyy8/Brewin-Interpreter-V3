@@ -27,7 +27,9 @@ def create_var_object(var_type, var_name):
     # variable holds object references (store class name)
     else:
         return VariableDefinition(InterpreterBase.CLASS_DEF, var_name, var_type)
-    
+
+# 
+
 class ObjectDefinition:
     def __init__(self, interpreter, class_name, class_def):
         self.class_name = class_name
@@ -316,6 +318,7 @@ class ObjectDefinition:
         for arg in statement:
             # expressions evaluating to str, int, bool values wrapped in ''
             result = self.__evaluate_expression(arg, in_scope_vars)
+            # print("print statement prints:", result)
             if(len(result)>0 and result[0]=='"'):
                 result = result[1:-1]
             output += result
@@ -600,7 +603,7 @@ class ObjectDefinition:
             param_var = create_var_object(param_type, param_name)
             param_var_type = param_var.get_type()
 
-            arg_val = obj_args[i].get_value()
+            # obj_args[i] are val_def objects!
             arg_type = obj_args[i].get_type()
 
             # TYPE CHECKING PARAMETER INITIALIZATION / TYPE CHECKING ASSIGNMENTS:
@@ -609,11 +612,11 @@ class ObjectDefinition:
                 self.itp.error(ErrorType.NAME_ERROR, f"Parameter of type '{param_var_type}' cannot be assigned to a value of type '{arg_type}'.")
             elif(arg_type == InterpreterBase.CLASS_DEF):
                 # Null can be assigned to any variables holding any type of object reference.
-                if(arg_val == InterpreterBase.NULL_DEF):
+                if(obj_args[i].get_value() == InterpreterBase.NULL_DEF):
                     call_scope_vars[param_name] = (param_var, obj_args[i])
 
                 # if: variable and value are of the same class type.
-                elif(arg_val.get_class_name() == param_var.get_class_name()):
+                elif(obj_args[i].get_class_name() == param_var.get_class_name()):
                     call_scope_vars[param_name] = (param_var, obj_args[i])
                     # idk = self.my_fields[param_name]
                     # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
@@ -622,7 +625,7 @@ class ObjectDefinition:
                 #     print("CALL STATEMENT -- CHECK FOR POLYMORPHISM HERE.")
                 # else: error
                 else:
-                    set.itp.error(ErrorType.TYPE_ERROR, f"'{arg_val.get_class_name()}' is not the same as or derived from class '{param_var.get_class_name()}'.")
+                    set.itp.error(ErrorType.NAME_ERROR, f"'{obj_args[i].get_class_name()}' is not the same as or derived from class '{param_var.get_class_name()}'.")
             # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
             else:
                 call_scope_vars[param_name] = (param_var, obj_args[i])
@@ -681,24 +684,24 @@ class ObjectDefinition:
                 # Primitive return type.
                 if(return_type == InterpreterBase.INT_DEF or return_type == InterpreterBase.STRING_DEF or return_type == InterpreterBase.BOOL_DEF):
                     if(val_type != return_type):
-                        self.itp.error(ErrorType.NAME_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
+                        self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
                     else:
                         return (val.get_value(), return_status)
                 # Object reference/class return type.
                 else:
                     # if: value is not an object reference, then error.
                     if(val_type != InterpreterBase.CLASS_DEF):
-                        self.itp.error(ErrorType.NAME_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
+                        self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
 
                     # if: value == null or is an object reference of class type == return type, then return value.
-                    if(val == InterpreterBase.NULL_DEF or val.get_class_name() == return_type):
+                    if(val.get_value() == InterpreterBase.NULL_DEF or val.get_class_name() == return_type):
                         return (val.get_value(), return_status)
                     # elif: value's type is a subclass of return type, return value.
                     # elif ():
                     # HANDLE POLYMORPHISM HERE.
                     # else: error
                     else:
-                        self.itp.error(ErrorType.NAME_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val.get_class_name()}'.")
+                        self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val.get_class_name()}'.")
         # void function should not return value
         else:
             if(returned_val[0] != None):
@@ -727,6 +730,7 @@ class ObjectDefinition:
                 val_type = val.get_type()
 
                 # TODO: Need to handle polymorphism.
+                # Type mismatch == TYPE_ERROR (checked on barista)
                 if(val_type != var_type):
                     self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_type}', but value is of type '{val_type}'.")
                 elif(val_type == InterpreterBase.CLASS_DEF):
