@@ -45,6 +45,22 @@ def create_method_type_signature(method_def):
 
     return signature
 
+# POLYMORPHISM CHECKING
+def is_subclass(var_class, val):
+    # retrieve object's parent (class it is derived from)
+    parent_name = val.get_parent_name()
+
+    while(parent_name is not None):
+        # value's class type IS A SUBCLASS of variable's class type
+        if(parent_name == var_class):
+            return True
+        else:
+            parent_obj = val.get_parent_obj()
+            parent_name = parent_obj.get_parent_name()
+        
+    # value's class type IS NOT A SUBCLASS of variable's class type
+    return False
+
 class ObjectDefinition:
     def __init__(self, interpreter, class_name, class_def_tuple):
         self.class_name = class_name
@@ -77,18 +93,19 @@ class ObjectDefinition:
                     self.itp.error(ErrorType.NAME_ERROR, "Fields cannot share the same name.")
                 # map field name to a value with type tag
                 else:
-                    # TYPE CHECKING FIELD INITIALIZATION:
+                    # TYPE CHECKING: FIELD INITIALIZATION:
                     field_var = create_var_object(type_name, field_name)
                     init_val = create_value_object(init_val)
 
                     field_var_type = field_var.get_type()                       # do this because it's gonna be diff from type_name if field holds object references
                     init_val_type = init_val.get_type()
-                    #TODO: This does not account for polymorphism yet. Not yet comparing class names if type == CLASS_DEF
-                    # Types (int, string, bool, class) should match.
+
+                    # For fields, values are not object references. They are either constants or null.
+                    # Variable types: int, string, bool, class.
+                    # Value types: int, string, bool, class (null constant)
                     if(init_val_type != field_var_type):
                         self.itp.error(ErrorType.TYPE_ERROR, f"Field of type '{field_var_type}' cannot be initialized with a value of type '{init_val_type}'.")
                     # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
-                    # For fields, values are not object references. They are either constants or null.
                     else:
                         self.my_fields[field_name] = (field_var, init_val)
             
@@ -113,6 +130,12 @@ class ObjectDefinition:
 
     def get_object_type(self):
         return self.class_name
+
+    def get_parent_name(self):
+        return self.parent_name
+
+    def get_parent_obj(self):
+        self.parent_obj
 
     # JUST FOR MAIN() IN MAIN CLASS.
     def call_main_method(self, method_name):
@@ -317,7 +340,7 @@ class ObjectDefinition:
                         elif(type(op1)==ObjectDefinition):
                             # if class types do not match & classes are not related (subclass; polymorphism) --> error
                             # TODO: HANDLE POLYMORPHISM HERE. CHECK THAT CLASSES ARE RELATED
-                            if(op1.get_object_type() != op2.get_object_type()):
+                            if((op1.get_object_type() != op2.get_object_type())):
                                 self.itp.error(ErrorType.TYPE_ERROR, "Operands are object references are not of same or related class types.")
                 
                 # perform math or compare operation:
@@ -361,7 +384,12 @@ class ObjectDefinition:
         for arg in statement:
             # expressions evaluating to str, int, bool values wrapped in ''
             result = self.__evaluate_expression(arg, in_scope_vars)
-            # print("print statement prints:", result)
+
+            # if result != 'null':
+            #     print("print statement prints:", result.get_object_type())
+            # else:
+            #     print("print statement prints:", result)
+
             if(len(result)>0 and result[0]=='"'):
                 result = result[1:-1]
             output += result
@@ -531,29 +559,32 @@ class ObjectDefinition:
                 # evaluate new value
                 new_val = self.__evaluate_expression(new_val, in_scope_vars)  # eval_expr() handles everything set receives as new_val arg
                 # create val_def object for new value
-                new_val = create_value_object(new_val)
-                new_val_type = new_val.get_type()
+                new_val_obj = create_value_object(new_val)
+                new_val_type = new_val_obj.get_type()
 
                 # get variable's type (use var_def object)
-                var_to_update = var[0]
-                var_to_update_type = var_to_update.get_type()
+                var_to_update_obj = var[0]
+                var_to_update_type = var_to_update_obj.get_type()
 
                 # TYPE CHECKING ASSIGNMENTS:
-                # TODO: Need to handle polymorphism.
+                # TODO: Need to handle POLYMORPHISM.
                 if(new_val_type != var_to_update_type):
                     self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_to_update_type}', but value is of type '{new_val_type}'.")
                 elif(new_val_type == InterpreterBase.CLASS_DEF):
                     # Null can be assigned to any variables holding any type of object reference.
-                    if(new_val.get_value() == InterpreterBase.NULL_DEF):
-                        in_scope_vars[which_dict][var_name] = (var_to_update, new_val)
+                    # Value can be assigned to variable if value's class type is the same or is a subclass of variable's class type.
+                    if(new_val_obj.get_value() == InterpreterBase.NULL_DEF
+                       or new_val_obj.get_class_name() == var_to_update_obj.get_class_name()
+                       or is_subclass(var_to_update_obj.get_class_name(), new_val_obj.get_value())):
+                        in_scope_vars[which_dict][var_name] = (var_to_update_obj, new_val_obj)
                         return
                     
-                    # if: variable and value are of the same class type.
-                    if(new_val.get_class_name() == var_to_update.get_class_name()):
-                        in_scope_vars[which_dict][var_name] = (var_to_update, new_val)
-                        # idk = self.my_fields['p']
-                        # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
-                        return
+                    # # if: variable and value are of the same class type.
+                    # if(new_val_obj.get_class_name() == var_to_update.get_class_name()):
+                    #     in_scope_vars[which_dict][var_name] = (var_to_update, new_val_obj)
+                    #     # idk = self.my_fields['p']
+                    #     # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
+                    #     return
                     
                     # elif: value's class is derived from of variable's class
                     # elif True:
@@ -565,7 +596,7 @@ class ObjectDefinition:
                 # Otherwise, value is primitive or null.
                 else:
                     # if it type checking passes, update the variable & return from function (don't run error statement)
-                    in_scope_vars[which_dict][var_name] = (var_to_update, new_val)
+                    in_scope_vars[which_dict][var_name] = (var_to_update_obj, new_val_obj)
                     # print(var_to_update.get_type(), var_to_update.get_name(), "==>", new_val.get_type(), new_val.get_value())
                     return
     
@@ -650,23 +681,33 @@ class ObjectDefinition:
             arg_type = obj_args[i].get_type()
 
             # TYPE CHECKING PARAMETER INITIALIZATION / TYPE CHECKING ASSIGNMENTS:
-            # TODO: This does not account for polymorphism yet.
+            # TODO: This does not account for POLYMORPHISM yet.
             if(arg_type != param_var_type):
                 self.itp.error(ErrorType.NAME_ERROR, f"Parameter of type '{param_var_type}' cannot be assigned to a value of type '{arg_type}'.")
             elif(arg_type == InterpreterBase.CLASS_DEF):
                 # Null can be assigned to any variables holding any type of object reference.
-                if(obj_args[i].get_value() == InterpreterBase.NULL_DEF):
+                # Value can be assigned to variable if value's class type is the same or is a subclass of variable's class type.
+                if(obj_args[i].get_value() == InterpreterBase.NULL_DEF
+                    or obj_args[i].get_class_name() == param_var.get_class_name()
+                    or is_subclass(param_var.get_class_name(), obj_args[i].get_value())):
                     call_scope_vars[param_name] = (param_var, obj_args[i])
 
-                # if: variable and value are of the same class type.
-                elif(obj_args[i].get_class_name() == param_var.get_class_name()):
-                    call_scope_vars[param_name] = (param_var, obj_args[i])
                     # idk = self.my_fields[param_name]
                     # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
-                # elif: value's class is derived from of variable's class
-                # elif True:
-                #     print("CALL STATEMENT -- CHECK FOR POLYMORPHISM HERE.")
-                # else: error
+                
+                # # Null can be assigned to any variables holding any type of object reference.
+                # if(obj_args[i].get_value() == InterpreterBase.NULL_DEF):
+                #     call_scope_vars[param_name] = (param_var, obj_args[i])
+
+                # # if: variable and value are of the same class type.
+                # elif(obj_args[i].get_class_name() == param_var.get_class_name()):
+                #     call_scope_vars[param_name] = (param_var, obj_args[i])
+                #     # idk = self.my_fields[param_name]
+                #     # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
+                # # elif: value's class is derived from of variable's class
+                # # elif True:
+                # #     print("CALL STATEMENT -- CHECK FOR POLYMORPHISM HERE.")
+                # # else: error
                 else:
                     self.itp.error(ErrorType.NAME_ERROR, f"'{obj_args[i].get_class_name()}' is not the same as or derived from class '{param_var.get_class_name()}'.")
             # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
@@ -736,13 +777,18 @@ class ObjectDefinition:
                     if(val_type != InterpreterBase.CLASS_DEF):
                         self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
 
-                    # if: value == null or is an object reference of class type == return type, then return value.
-                    if(val.get_value() == InterpreterBase.NULL_DEF or val.get_class_name() == return_type):
+                    # Can return null, or a value whose class type is the same or is a subclass of return class type.
+                    if(val.get_value() == InterpreterBase.NULL_DEF or val.get_class_name() == return_type
+                       or is_subclass(return_type, val.get_value())):
                         return (val.get_value(), return_status)
-                    # elif: value's type is a subclass of return type, return value.
-                    # elif ():
-                    # HANDLE POLYMORPHISM HERE.
-                    # else: error
+                    
+                    # # if: value == null or is an object reference of class type == return type, then return value.
+                    # if(val.get_value() == InterpreterBase.NULL_DEF or val.get_class_name() == return_type):
+                    #     return (val.get_value(), return_status)
+                    # # elif: value's type is a subclass of return type, return value.
+                    # # elif ():
+                    # # HANDLE POLYMORPHISM HERE.
+                    # # else: error
                     else:
                         self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val.get_class_name()}'.")
         # void function should not return value
@@ -766,35 +812,42 @@ class ObjectDefinition:
                 self.itp.error(ErrorType.NAME_ERROR, "No duplicate named local variables.")
             else:
                 # TODO: TYPE CHECKING ASSIGNMENTS:
-                var = create_var_object(type_name, var_name)
-                val = create_value_object(init_val)
+                var_obj = create_var_object(type_name, var_name)
+                val_obj = create_value_object(init_val)
 
-                var_type = var.get_type()
-                val_type = val.get_type()
+                var_obj_type = var_obj.get_type()
+                val_obj_type = val_obj.get_type()
 
-                # TODO: Need to handle polymorphism.
+                # TODO: Need to handle POLYMORPHISM.
                 # Type mismatch == TYPE_ERROR (checked on barista)
-                if(val_type != var_type):
-                    self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_type}', but value is of type '{val_type}'.")
-                elif(val_type == InterpreterBase.CLASS_DEF):
+                if(val_obj_type != var_obj_type):
+                    self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_obj_type}', but value is of type '{val_obj_type}'.")
+                elif(val_obj_type == InterpreterBase.CLASS_DEF):
                     # Null can be assigned to any variables holding any type of object reference.
-                    if(val.get_value() == InterpreterBase.NULL_DEF):
-                        local_dict[var_name] = (var, val)
-                    # if: variable and value are of the same class type.
-                    elif(val.get_class_name() == var.get_class_name()):
-                        local_dict[var_name] = (var, val)
-                        # idk = self.my_fields[var_name]
-                        # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
-                    # elif: value's class is derived from of variable's class
-                    # elif True:
-                    #     print("LET STATEMENT -- CHECK FOR POLYMORPHISM HERE.")
-                    # else: error
+                    # Value can be assigned to variable if value's class type is the same or is a subclass of variable's class type.
+                    if(val_obj.get_value() == InterpreterBase.NULL_DEF
+                       or val_obj.get_class_name() == var_obj.get_class_name()
+                       or is_subclass(var_obj.get_class_name(), val_obj.get_value())):
+                        local_dict[var_name] = (var_obj, val_obj)
+                    
+                    # # Null can be assigned to any variables holding any type of object reference.
+                    # if(val.get_value() == InterpreterBase.NULL_DEF):
+                    #     local_dict[var_name] = (var, val)
+                    # # if: variable and value are of the same class type.
+                    # elif(val.get_class_name() == var.get_class_name()):
+                    #     local_dict[var_name] = (var, val)
+                    #     # idk = self.my_fields[var_name]
+                    #     # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
+                    # # elif: value's class is derived from of variable's class
+                    # # elif True:
+                    # #     print("LET STATEMENT -- CHECK FOR POLYMORPHISM HERE.")
+                    # # else: error
                     else:
-                        self.itp.error(ErrorType.TYPE_ERROR, f"'{val_type}' is not the same as or derived from class '{var_type}'.")
+                        self.itp.error(ErrorType.TYPE_ERROR, f"'{val_obj_type}' is not the same as or derived from class '{var_obj_type}'.")
                 # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
                 else:
                     # if it type checking passes, update the variable & return from function (don't run error statement)
-                    local_dict[var_name] = (var, val)
+                    local_dict[var_name] = (var_obj, val_obj)
                     # print(var.get_type(), var.get_name(), "==>", val.get_type(), val.get_value())
 
         # add this dictionary to in_scope_vars
