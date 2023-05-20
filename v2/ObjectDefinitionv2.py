@@ -29,21 +29,29 @@ def create_var_object(var_type, var_name):
         return VariableDefinition(InterpreterBase.CLASS_DEF, var_name, var_type)
 
 # method_def = ['return_type', 'name', [[type1, param1], [type2, param2], ..], ['top-level statement']]
-# signature: "return_type method_name $num_params param1_type param2_type ... "
+# signature: "method_name $num_params param1_type param2_type ... "
 
-# TODO: FOR FUNTION OVERLOADING / OVERRIDING. Check if return type is needed to differentiate between methods.
-def create_method_type_signature(method_def):
-    return_type = method_def[0]
-    method_name = method_def[1]
-    params_list = method_def[2]
+# TODO: FOR FUNCTION OVERLOADING / OVERRIDING. Check if return type is needed to differentiate between methods.
+def create_method_type_signature(params_list):
+    # return_type = method_def[0]
+    # method_name = method_def[1]
+    # params_list = method_def[2]
     
-    signature = return_type + " " + method_name + " " + str(len(params_list)) + " "
+    signature = ""
 
     for param in params_list:
         param_type = param[0]
         signature += param_type + " "
 
     return signature
+
+# def create_method_type_signature(method_name, list_of_types):
+#     signature = method_name + " " + str(len(list_of_types)) + " "
+
+#     for t in list_of_types:
+#         signature += t + " "
+
+#     return signature
 
 # POLYMORPHISM CHECKING
 def is_subclass(var_class, val):
@@ -111,22 +119,30 @@ class ObjectDefinition:
             
             elif item[0] == self.itp.METHOD_DEF:
                 method_name = item[2]
+                params_list = item[3]
+                method_def = [item[1]] + item[3:]
+                signature = create_method_type_signature(params_list)
+
                 if(method_name in self.my_methods):
-                    self.itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
+                    overloaded_defs = self.my_methods[method_name]
+                    if signature in overloaded_defs:
+                        self.itp.error(ErrorType.NAME_ERROR, "Cannot have duplicate methods with same name & type signature.")
+                    else:
+                        self.my_methods[method_name][signature] = method_def
                 # map method name to its whole definition (return, params, statements)
                 else:
-                    method_def = [item[1]] + item[3:]
-                    signature = create_method_type_signature(item[1:4])
-                    self.my_methods[method_name] = (signature, method_def)  # BREWIN++ version
+                    self.my_methods[method_name] = {signature: method_def}
+                    # self.my_methods[method_name][signature] = method_def
 
         # print("MY FIELDS:")
         # for k, v in self.my_fields.items():
         #     print(k, ":", v[0].get_type(), v[0].get_name(), "= ", v[1].get_type(), v[1].get_value())
         # print("MY METHODS:")
         # for k, v in self.my_methods.items():
-        #     print(k, ":", v[1], "==>", v[2])
+        #     for k1, v1 in v.items():
+        #         print(k, ":", v1[0], "==>", v1[1])
         # print("MY PARENT OBJECT")
-        # print(self.my_parent_name, ": " self.my_parent_obj)
+        # print(self.parent_name, ": ", self.parent_obj)
 
     def get_object_type(self):
         return self.class_name
@@ -139,11 +155,13 @@ class ObjectDefinition:
 
     # JUST FOR MAIN() IN MAIN CLASS.
     def call_main_method(self, method_name):
-        method_def = self.__find_method(method_name)
+        method_def_dict = self.__find_method(method_name)
 
         # TODO: Check if this check is needed. I think so bc it's like calling any other method. Check if method exists or else name error. Matches barista right now.
-        if method_def is None:
+        if method_def_dict is None:
             self.itp.error(ErrorType.NAME_ERROR, "Cannot find method with the name 'main'.")
+
+        method_def = method_def_dict[""]            # main has no parameters & there is only 1 main function
 
         top_level_statement = self.get_top_level_statement(method_def)
         result = self.__run_statement(top_level_statement)
@@ -158,11 +176,43 @@ class ObjectDefinition:
         # While there is a parent class, search through each class level's methods.
         # If method is found, break out of loop.
         # If loop ends without finding a method, the return value will be None (default by setting return value to result of dict search).
-        method_def_tuple = self.my_methods.get(method_name)
-        if(method_def_tuple is None):
-            return None
-        else:
-            return method_def_tuple[1]
+        
+        # Collect all versions of method with method_name. If signatures are identical, then only keep the first one found.
+        # If signatures are identical, then it means we are overriding superclasses' versions.
+        # If signatures are different, then it means we are overloading methods.
+        all_possible_method_defs = self.my_methods.get(method_name)
+
+        parent_obj = self.parent_obj
+        while(parent_obj is not None):
+            add_methods = parent_obj.my_methods.get(method_name)
+            parent_obj = parent_obj.get_parent_obj()
+
+            if add_methods is None:
+                continue
+            else:
+                for sig, mdef in add_methods.items():
+                    if all_possible_method_defs is None:
+                        all_possible_method_defs = {sig: mdef}
+                    elif sig not in all_possible_method_defs:
+                        all_possible_method_defs[sig] = mdef
+
+        # Would return None of no methods found in current or parent classes.
+        return all_possible_method_defs
+    
+        # if(all_possible_method_defs is None):
+        #     # retrieve object's parent object & search through its my_methods dictionary for the method
+        #     parent_obj = self.parent_obj
+        #     while(parent_obj is not None):
+        #         method_def_tuple = parent_obj.my_methods.get(method_name)
+        #         if(method_def_tuple is not None):
+        #             return method_def_tuple[1]
+        #         else:
+        #             parent_obj = parent_obj.get_parent_obj()
+            
+        #     # did not find method in superclasses
+        #     return None
+        # else:
+        #     return method_def_tuple[1]
     
     # Get top_level statement (single statement or 'begin' with substatements).
     def get_top_level_statement(self, method_def):
@@ -618,7 +668,7 @@ class ObjectDefinition:
         # 'target_object_name' is either 'me' or a member variable that holds an object reference.
         # Use 'self' to find method or retrieve 'object reference' get its method's definition.
         if(target_object_name == self.itp.ME_DEF):
-            method_def = self.__find_method(method_name)
+            possible_method_defs = self.__find_method(method_name)
         else:
             # retrieve value from variable
             target_object = self.__evaluate_expression(target_object_name, [self.my_fields])
@@ -626,18 +676,80 @@ class ObjectDefinition:
             if(type(target_object) != ObjectDefinition):
                 self.itp.error(ErrorType.FAULT_ERROR, "Target object must be an object reference.")
             # use object reference
-            method_def = target_object.__find_method(method_name)
+            possible_method_defs = target_object.__find_method(method_name)
 
         # Check if method is undefined.
-        if(method_def is None):
+        if(possible_method_defs is None):
             self.itp.error(ErrorType.NAME_ERROR, f"Cannot find method with the name '{method_name}'.")
 
+        # possible_method_defs = { 'signature' : method_def }
         # method_def == ['return_type', [[type1, param1], [type2, param2], ..], ['top-level statement']]
 
-        # Check if number of arguments matches number of parameters.
+        # Arguments can be constants, variables, or expressions. Process them with parent's scope before creating new lexical environment.
+        eval_args = []
+        for arg in arguments:
+            eval_args.append(self.__evaluate_expression(arg, parent_scope_vars))
+        
+        # Create value_def object for each value processed by evaluated expression.
+        obj_args = []
+        for arg in eval_args:
+            obj_args.append(create_value_object(arg))
+        
+        # Create list of types.
+        arg_types = ""
+        for val_obj in obj_args:
+            if val_obj.get_type() == InterpreterBase.CLASS_DEF:
+                if val_obj.get_value() == InterpreterBase.NULL_DEF:
+                    arg_types += InterpreterBase.NULL_DEF + " "
+                else:
+                    arg_types += val_obj.get_class_name() + " "
+            else:
+                arg_types += val_obj.get_type() + " "
+        
+        if(arg_types == ""):
+            arg_types = []
+        else:
+            arg_types = list(arg_types[:-1].split(" "))
+
+        # Use args types to find method with params of same types.
+        for sig in possible_method_defs:
+            this_sig = sig
+            found_match = True      
+
+            if(sig == ""):
+                sig_types = []
+            else:
+                sig_types = list(sig[:-1].split(" "))
+            
+            if len(arg_types) != len(sig_types):
+                this_sig = None
+                found_match = False
+                continue
+
+            for i in range(len(arg_types)):
+                if(sig_types[i] == InterpreterBase.INT_DEF or sig_types[i] == InterpreterBase.STRING_DEF or sig_types[i] == InterpreterBase.BOOL_DEF):
+                    if(sig_types[i] != arg_types[i]):
+                        this_sig = None
+                        found_match = False
+                        break
+                else:
+                    if(arg_types != InterpreterBase.NULL_DEF and not is_subclass(sig_types[i], obj_args[i])):
+                        this_sig = None
+                        found_match = False
+                        break
+        
+        if this_sig is None:
+            self.itp.error(ErrorType.NAME_ERROR, f"Cannot find method '{method_name}' with matching parameter types.")
+
+        method_def = possible_method_defs[this_sig]
         parameters = method_def[1]
-        if(len(parameters) != len(arguments)):
-            self.itp.error(ErrorType.TYPE_ERROR, f"You passed in {len(arguments)} argument(s) for {len(parameters)} parameter(s).")
+
+        #-----------------------------------------------------------------------------------
+
+        # # Check if number of arguments matches number of parameters.
+        # parameters = method_def[1]
+        # if(len(parameters) != len(arguments)):
+        #     self.itp.error(ErrorType.TYPE_ERROR, f"You passed in {len(arguments)} argument(s) for {len(parameters)} parameter(s).")
 
         # TODO: Check for duplicate parameter names. Is this an error I should be checking?? Can't find it on spec.
         unique_param_names = set()
@@ -647,10 +759,10 @@ class ObjectDefinition:
             else:
                 unique_param_names.add(param[1])
 
-        # Arguments can be constants, variables, or expressions. Process them with parent's scope before creating new lexical environment.
-        eval_args = []
-        for arg in arguments:
-            eval_args.append(self.__evaluate_expression(arg, parent_scope_vars))
+        # # Arguments can be constants, variables, or expressions. Process them with parent's scope before creating new lexical environment.
+        # eval_args = []
+        # for arg in arguments:
+        #     eval_args.append(self.__evaluate_expression(arg, parent_scope_vars))
 
         # Map parameters to arguments; add them to dictionary of visible variables (in-scope) for method call (make lex enviro)
         # Fields are always in-scope, unless shadowed.
@@ -663,11 +775,11 @@ class ObjectDefinition:
         # I think the parameter names are shared across all objects of same class,
         # but this key is creating a new pool of visible variables for each method call, so PBV should still hold. 
 
-        # MARK
-        # Create value_def object for each value processed by evaluated expression.
-        obj_args = []
-        for arg in eval_args:
-            obj_args.append(create_value_object(arg))
+        # # MARK
+        # # Create value_def object for each value processed by evaluated expression.
+        # obj_args = []
+        # for arg in eval_args:
+        #     obj_args.append(create_value_object(arg))
             
         # Append value_def object IFF its type matches parameter type. Otherwise, raise error.
         for i in range(len(parameters)):
