@@ -9,6 +9,13 @@ class Interpreter(InterpreterBase):
     def __init__(self, console_output=True, inp=None, trace_output=False):
         super().__init__(console_output, inp)   # call InterpreterBase’s constructor
         self.classes = {}
+        self.caller = None
+
+    def set_caller(self, caller):
+        self.caller = caller
+
+    def get_caller(self):
+        return self.caller
 
     # Map classes to their definitions.
     def __track_all_classes__(self, parsed_program):

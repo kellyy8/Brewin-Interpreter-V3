@@ -659,6 +659,11 @@ class ObjectDefinition:
         if(target_object_name == self.itp.ME_DEF):
             target_object = None
             dict_of_method_defs = self.__find_method(method_name)
+            self.itp.set_caller(self)
+        elif(target_object_name == InterpreterBase.SUPER_DEF):
+            target_object = self.itp.get_caller()
+            dict_of_method_defs = self.__find_method(method_name)
+            self.itp.set_caller(target_object)
         else:
             # retrieve value from variable
             target_object = self.__evaluate_expression(target_object_name, [self.my_fields])
@@ -667,6 +672,7 @@ class ObjectDefinition:
                 self.itp.error(ErrorType.FAULT_ERROR, "Target object must be an object reference.")
             # use object reference
             dict_of_method_defs = target_object.__find_method(method_name)
+            self.itp.set_caller(target_object)
 
         # Arguments can be constants, variables, or expressions. Process them with parent's scope before creating new lexical environment.
         eval_args = []
