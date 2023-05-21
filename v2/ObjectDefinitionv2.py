@@ -53,6 +53,7 @@ def create_args_type_signature(args_list):
         arg_type = arg.get_type()
         # instances or null
         if arg_type == InterpreterBase.CLASS_DEF:
+            # always store null if value is null :)
             if type(arg_val) == tuple:
                 signature += [arg_val[0]]
             elif arg_val == InterpreterBase.NULL_DEF:
@@ -136,13 +137,14 @@ def is_subclass(var_class, val_obj):
     # var_class == class_name; val_obj == ObjectDefinition object (extracted from ValueDefinition object's value)
     # retrieve object's parent (class it is derived from)
     parent_name = val_obj.get_parent_name()
+    parent_obj = val_obj.get_parent_obj()
 
     while(parent_name is not None):
         # val_def object's type IS A SUBCLASS of variable's class type
         if(parent_name == var_class):
             return True
         else:
-            parent_obj = val_obj.get_parent_obj()
+            parent_obj = parent_obj.get_parent_obj()
             if parent_obj is None:
                 break
             parent_name = parent_obj.get_parent_name()
@@ -312,6 +314,14 @@ class ObjectDefinition:
                     # extract the value from value_def object & return it; ends loop and function (no error)
                     value_obj = var[1]
                     # print("value:", value_obj.get_value())
+
+                    # # NULL TYPE TAG : variable holds a 'null' returned from method call
+                    # if value_obj.get_value() == InterpreterBase.NULL_DEF:
+                    #     null_type_tag = value_obj.get_class_name()
+                    #     if null_type_tag is not None:
+                    #         return (value_obj.get_value(), null_type_tag)
+
+                    # else: return everything else and null constants as is                        
                     return value_obj.get_value()
             
             # this line only runs if we searched through each scope dictionary and did not find variable with such name
@@ -401,7 +411,7 @@ class ObjectDefinition:
                 op1 = self.__convert_operands_from_parsed_form(op1)
                 op2 = self.__convert_operands_from_parsed_form(op2)
                 
-                # TYPE CHECKING: ASSIGNMENTS/COMPARISONS
+                # TYPE CHECKING: COMPARISONS
                 # check for type compatibility & operand compatibility
                 if expr=='+' and not(type(op1)==int and type(op2)== int) and not(type(op1)==str and type(op2)==str):
                     self.itp.error(ErrorType.TYPE_ERROR, "'+' only works with integers and strings.")
@@ -656,7 +666,7 @@ class ObjectDefinition:
                 if(new_val_type != var_to_update_type):
                     self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_to_update_type}', but value is of type '{new_val_type}'.")
                 elif(new_val_type == InterpreterBase.CLASS_DEF):
-                    # TYPE CHECK NULL if it is returned from a method call. Apparently these null's differ by method's return_type.
+                    # CHECK NULL TYPE TAG if null is returned from a method call. Apparently these null's differ by method's return_type.
                     # Otherwise, null can be assigned to any variables holding any type of object reference. (null can be a constant or constant stored in variable's of different class types)
                     # Value can be assigned to variable if value's class type is the same or is a subclass of variable's class type.
                     if(new_val_obj.get_value() == InterpreterBase.NULL_DEF):
@@ -840,16 +850,19 @@ class ObjectDefinition:
             # DOES NOT run return statement or do not return a value (no return expression):
             if(returned_val[1] == False or returned_val[0] == None):
                 return default_returned_val
+            
             # DOES return a value --> check compatible type
             else:
                 val = create_value_object(returned_val[0])
                 val_type = val.get_type()
+
                 # Primitive return type.
                 if(return_type == InterpreterBase.INT_DEF or return_type == InterpreterBase.STRING_DEF or return_type == InterpreterBase.BOOL_DEF):
                     if(val_type != return_type):
                         self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
                     else:
                         return (val.get_value(), return_status)
+                    
                 # Object reference/class return type.
                 else:
                     # if: value is not an object reference, then error.
@@ -857,6 +870,13 @@ class ObjectDefinition:
                         self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
 
                     # NULL TYPE TAG: Return value == null or object whose class type is the same or is a subclass of return class type.
+                    # if(len(returned_val) == 3):
+                    #     null_type_tag = returned_val[2]
+                    #     if(return_type != null_type_tag and not is_subclass_for_null_objects(self.itp, return_type, null_type_tag)):
+                    #         self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{null_type_tag}'.")
+                    #     else:
+                    #         return (returned_val[0], return_status, return_type)
+
                     if(val.get_value() == InterpreterBase.NULL_DEF):
                         return (val.get_value(), return_status, return_type)
                     
