@@ -1,4 +1,3 @@
-
 from intbase import InterpreterBase, ErrorType
 from ValueDefinitionv2 import ValueDefinition
 from VariableDefinitionv2 import VariableDefinition
@@ -136,13 +135,14 @@ def is_subclass(var_class, val_obj):
     # var_class == class_name; val_obj == ObjectDefinition object (extracted from ValueDefinition object's value)
     # retrieve object's parent (class it is derived from)
     parent_name = val_obj.get_parent_name()
+    parent_obj = val_obj.get_parent_obj()
 
     while(parent_name is not None):
         # val_def object's type IS A SUBCLASS of variable's class type
         if(parent_name == var_class):
             return True
         else:
-            parent_obj = val_obj.get_parent_obj()
+            parent_obj = parent_obj.get_parent_obj()
             if parent_obj is None:
                 break
             parent_name = parent_obj.get_parent_name()
