@@ -562,6 +562,10 @@ class ObjectDefinition:
     
     def __execute_return_statement(self, statement, in_scope_vars):            # [return] or [return, [expression]]
         # HANDLE TERMINATION
+        # handle 'return me' statement
+        if statement == InterpreterBase.ME_DEF:
+            return (self.itp.get_caller(), True)
+        
         return (self.__evaluate_expression(statement, in_scope_vars), True)
     
     def __execute_all_sub_statements_of_begin_statement(self, statement, in_scope_vars):
