@@ -88,7 +88,7 @@ def valid_args_passed(params_sig, args_sig, args_list):
                 return False
         # param of 'class' type; arg must be 'null', same class, or subclass of 'class' 
         else:
-            if(at != InterpreterBase.NULL_DEF and pt != at and not is_subclass(pt, args_list[i])):
+            if(at != InterpreterBase.NULL_DEF and pt != at and not is_subclass(pt, args_list[i].get_value())):
                 return False
 
     return True
@@ -108,7 +108,7 @@ def get_method_params_signature_from_dict(d, args_sig, args_list):
 
 # TODO: FOR POLYMORPHISM CHECKING
 def is_subclass(var_class, val_obj):
-    # var_class == class_name; val_obj == val_def object
+    # var_class == class_name; val_obj == ObjectDefinition object (extracted from ValueDefinition object's value)
     # retrieve object's parent (class it is derived from)
     parent_name = val_obj.get_parent_name()
 
@@ -395,7 +395,14 @@ class ObjectDefinition:
                         elif(type(op1)==ObjectDefinition):
                             # if class types do not match & classes are not related (subclass; polymorphism) --> error
                             # TODO: HANDLE POLYMORPHISM HERE. CHECK THAT CLASSES ARE RELATED
-                            if((op1.get_object_type() != op2.get_object_type())):
+                            op1_class = op1.get_object_type()
+                            op2_class = op2.get_object_type()
+                            op1_val_obj = create_value_object(op1)
+                            op2_val_obj = create_value_object(op2)
+                            op1_is_subclass_of_op2 = is_subclass(op2_class, op1_val_obj.get_value())
+                            op2_is_subclass_of_op1 = is_subclass(op1_class, op2_val_obj.get_value())
+                            
+                            if((op1_class != op2_class) and (not op1_is_subclass_of_op2) and (not op2_is_subclass_of_op1)):
                                 self.itp.error(ErrorType.TYPE_ERROR, "Operands are object references are not of same or related class types.")
 
                 # perform math or compare operation:
