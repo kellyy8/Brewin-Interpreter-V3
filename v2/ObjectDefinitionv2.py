@@ -83,7 +83,8 @@ def valid_args_passed(params_sig, args_sig, args_list):
         arg_obj = args_list[i]
 
         # primitives must match exactly
-        if(pt == InterpreterBase.INT_DEF or pt == InterpreterBase.STRING_DEF or pt == InterpreterBase.BOOL_DEF):
+        if(pt == InterpreterBase.INT_DEF or pt == InterpreterBase.STRING_DEF or pt == InterpreterBase.BOOL_DEF
+           or at == InterpreterBase.INT_DEF or at == InterpreterBase.STRING_DEF or at == InterpreterBase.BOOL_DEF):
             if(pt != at):
                 return False
         # param of 'class' type; arg must be 'null', same class, or subclass of 'class' 
@@ -622,19 +623,6 @@ class ObjectDefinition:
                        or is_subclass(var_to_update_obj.get_class_name(), new_val_obj.get_value())):
                         in_scope_vars[which_dict][var_name] = (var_to_update_obj, new_val_obj)
                         return
-
-                    # # if: variable and value are of the same class type.
-                    # if(new_val_obj.get_class_name() == var_to_update.get_class_name()):
-                    #     in_scope_vars[which_dict][var_name] = (var_to_update, new_val_obj)
-                    #     # idk = self.my_fields['p']
-                    #     # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
-                    #     return
-
-                    # elif: value's class is derived from of variable's class
-                    # elif True:
-                    #     print("SET STATEMENT -- CHECK FOR POLYMORPHISM HERE. (subclassing)")
-                    #     return
-                    # else: error
                     else:
                         self.itp.error(ErrorType.TYPE_ERROR, f"'{new_val_type}' is not the same as or derived from class '{var_to_update_type}'.")
                 # Otherwise, value is primitive or null.
