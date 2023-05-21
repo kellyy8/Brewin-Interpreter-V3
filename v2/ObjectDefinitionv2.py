@@ -53,7 +53,9 @@ def create_args_type_signature(args_list):
         arg_type = arg.get_type()
         # instances or null
         if arg_type == InterpreterBase.CLASS_DEF:
-            if arg_val == InterpreterBase.NULL_DEF:
+            if type(arg_val) == tuple:
+                signature += [arg_val[0]]
+            elif arg_val == InterpreterBase.NULL_DEF:
                 signature += [arg_val]
             else:
                 signature += [arg.get_class_name()]
@@ -64,7 +66,17 @@ def create_args_type_signature(args_list):
     signature = " ".join(signature)
     return signature
 
-def valid_args_passed(params_sig, args_sig, args_list):
+# need this because val_def objects have value == null; cannot use their value (non obj_def) to determine if is_subclass True or False
+def is_subclass_for_null_objects(itp, var_class, null_class):
+    class_def_tuple = itp.__find_class_definition__(null_class)
+    if(class_def_tuple is None):
+        itp.error(ErrorType.TYPE_ERROR, f"No class named '{null_class}' is found.")             # TODO: Check if error catch is needed.
+    
+    obj_def = ObjectDefinition(itp, null_class, class_def_tuple)
+    return is_subclass(var_class, obj_def)
+
+# TYPE CHECKING: PARAMETER INITIALIZATION
+def valid_args_passed(itp, params_sig, args_sig, args_list):
     # params_sig == method type signature (string)
     # args_sig == string of all argument types
     # args_list == list of val_def objects representing the arguments
@@ -92,12 +104,21 @@ def valid_args_passed(params_sig, args_sig, args_list):
                 return False
         # param of 'class' type; arg must be 'null', same class, or subclass of 'class' 
         else:
-            if(at != InterpreterBase.NULL_DEF and pt != at and not is_subclass(pt, args_list[i].get_value())):
+            # Check NULL TYPE TAG -- args_list[i] holds val_def with val == null and class_name == return_type/None
+            if(at == InterpreterBase.NULL_DEF):
+                return_type = args_list[i].get_class_name()
+                if(pt != return_type and not is_subclass_for_null_objects(itp, pt, return_type)):
+                    return False
+                else:
+                    return True
+
+            # if(at != InterpreterBase.NULL_DEF and pt != at and not is_subclass(pt, args_list[i].get_value())):
+            if(pt != at and not is_subclass(pt, args_list[i].get_value())):
                 return False
 
     return True
 
-def get_method_params_signature_from_dict(d, args_sig, args_list):
+def get_method_params_signature_from_dict(itp, d, args_sig, args_list):
     # d = dictionary of method defs {method type signature: method_def}
     # loop through all signatures in d; return signature if valid arguments assigned to parameters
     #TODO: CHECK: Search in any order, since we are searching in one class level at a time. No duplicate methods in any class.
@@ -105,7 +126,7 @@ def get_method_params_signature_from_dict(d, args_sig, args_list):
         return None
     
     for params_sig in d:
-        if valid_args_passed(params_sig, args_sig, args_list):
+        if valid_args_passed(itp, params_sig, args_sig, args_list):
             return params_sig
     
     return None
@@ -167,7 +188,7 @@ class ObjectDefinition:
                     field_var_type = field_var.get_type()                       # do this because it's gonna be diff from type_name if field holds object references
                     init_val_type = init_val.get_type()
 
-                    # For fields, values are not object references. They are either constants or null.
+                    # For fields, values are not object references. They are either constants or null. Init value ≠ expressions; just constants.
                     # Variable types: int, string, bool, class.
                     # Value types: int, string, bool, class (null constant)
                     if(init_val_type != field_var_type):
@@ -379,6 +400,7 @@ class ObjectDefinition:
                 # Convert op1 and op2 into int, string, or bool constants, null, or object reference.
                 op1 = self.__convert_operands_from_parsed_form(op1)
                 op2 = self.__convert_operands_from_parsed_form(op2)
+                
                 # TYPE CHECKING: ASSIGNMENTS/COMPARISONS
                 # check for type compatibility & operand compatibility
                 if expr=='+' and not(type(op1)==int and type(op2)== int) and not(type(op1)==str and type(op2)==str):
@@ -509,6 +531,7 @@ class ObjectDefinition:
                 # grab var_def object and break out of loop
                 var = var[0]
                 which_dict = i
+       
         # TYPE CHECKING ASSIGNMENTS:
         if(var.get_type() != InterpreterBase.STRING_DEF):
             self.itp.error(ErrorType.TYPE_ERROR, f"Variable is of type '{var.get_type()}', not 'string'.")
@@ -633,12 +656,18 @@ class ObjectDefinition:
                 if(new_val_type != var_to_update_type):
                     self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_to_update_type}', but value is of type '{new_val_type}'.")
                 elif(new_val_type == InterpreterBase.CLASS_DEF):
-                    # Null can be assigned to any variables holding any type of object reference.
+                    # TYPE CHECK NULL if it is returned from a method call. Apparently these null's differ by method's return_type.
+                    # Otherwise, null can be assigned to any variables holding any type of object reference. (null can be a constant or constant stored in variable's of different class types)
                     # Value can be assigned to variable if value's class type is the same or is a subclass of variable's class type.
                     if(new_val_obj.get_value() == InterpreterBase.NULL_DEF):
                         if(type(new_val) == tuple):
-                            if (var_to_update_obj.get_class_name() != new_val[1]):
-                                self.itp.error(ErrorType.TYPE_ERROR, f"'{new_val[1]}' is not the same as or derived from class '{var_to_update_obj.get_class_name()}'.")
+                            return_type = new_val[1]
+                            var_class = var_to_update_obj.get_class_name()
+                            if (var_class != return_type and not is_subclass_for_null_objects(self.itp, var_class, return_type)):
+                                self.itp.error(ErrorType.TYPE_ERROR, f"'{return_type}' is not the same as or derived from class '{var_class}'.")
+                            else:
+                                in_scope_vars[which_dict][var_name] = (var_to_update_obj, new_val_obj)
+                                return
                         else:
                             in_scope_vars[which_dict][var_name] = (var_to_update_obj, new_val_obj)
                             return
@@ -700,14 +729,18 @@ class ObjectDefinition:
         # Create value_def object for each value processed by evaluated expression.
         obj_args = []
         for arg in eval_args:
-            obj_args.append(create_value_object(arg))
+            # NULL TYPE TAG
+            if type(arg) == tuple:
+                obj_args.append(create_value_object((arg, arg[1])))
+            else:
+                obj_args.append(create_value_object(arg))
 
         args_type = create_args_type_signature(obj_args)
         method_def = None
 
         # If no methods found with matching method_name, or no methods with method_name do not have matching params & args,
         # search through parent's methods using recursive induction.
-        signature = get_method_params_signature_from_dict(dict_of_method_defs, args_type, obj_args)
+        signature = get_method_params_signature_from_dict(self.itp, dict_of_method_defs, args_type, obj_args)
         if dict_of_method_defs is None or signature is None:
             # target_object_name == 'me' ; get the parent object
             if target_object is None:
@@ -720,7 +753,7 @@ class ObjectDefinition:
                 dict_of_method_defs = parent_obj.__find_method(method_name)
 
                 # same check: if no method with method_name or no methods with name have right parameters, search parent's parent (recursion)
-                signature = get_method_params_signature_from_dict(dict_of_method_defs, args_type, obj_args)
+                signature = get_method_params_signature_from_dict(self.itp, dict_of_method_defs, args_type, obj_args)
                 if dict_of_method_defs is None or signature is None:
                     parent_obj = parent_obj.get_parent_obj()
                 else:
