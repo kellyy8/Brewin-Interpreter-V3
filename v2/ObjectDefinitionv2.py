@@ -32,11 +32,6 @@ def create_var_object(var_type, var_name):
 
 # TODO: FOR FUNCTION OVERLOADING / OVERRIDING. Check if return type is needed to differentiate between methods.
 def create_method_param_type_signature(params_list):
-    # return_type = method_def[0]
-    # method_name = method_def[1]
-    # params_list = method_def[2]
-    
-    # signature = return_type + " " + method_name + " " + str(len(params_list)) + " "
     signature = []
     for param in params_list:
         param_type = param[0]
@@ -65,32 +60,6 @@ def create_args_type_signature(args_list):
     
     signature = " ".join(signature)
     return signature
-
-# TODO: FOR FUNCTION OVERLOADING / OVERRIDING. Check if return type is needed to differentiate between methods.
-# def valid_args_passed(params_sig, args_list):
-#     # params_sig = method type signature (string) ; args_list = list of val_def objects representing the arguments
-#     params_sig_list = list(params_sig.split(" "))
-
-#     # number of arguments passed in ≠ number of formal parameters
-#     if len(params_sig_list) != len(args_list):
-#         return False
-    
-#     for i in range(len(params_sig_list)):
-#         p_type = params_sig_list[i]
-#         arg_obj = args_list[i]
-#         arg_val = arg_obj.get_value()
-#         arg_type = arg_obj.get_type()
-
-#         # primitives must match exactly
-#         if(p_type == InterpreterBase.INT_DEF or p_type == InterpreterBase.STRING_DEF or p_type == InterpreterBase.BOOL_DEF):
-#             if(p_type != arg_type):
-#                 return False
-#         # param of 'class' type; arg must be 'null', same class, or subclass of 'class' 
-#         else:
-#             if(arg_val != InterpreterBase.NULL_DEF and p_type != arg_obj.get_class_name() and not is_subclass(p_type, arg_obj)):
-#                 return False
-
-#     return True
 
 def valid_args_passed(params_sig, args_sig, args_list):
     # params_sig == method type signature (string)
@@ -162,10 +131,12 @@ class ObjectDefinition:
         self.my_methods = {}                             #{ 'method_name' : 'return_type', [[type1, param1], [type2, param2], ..], ['top-level statement'] }
         self.my_fields = {}                              #{ 'field_name' : (var_def object, value_def object) }
         self.itp = interpreter
+        
         # INHERITANCE
         # class_def_tuple = ( 'parent'/None, ['class_def'])
         self.parent_name = class_def_tuple[0]
         class_def = class_def_tuple[1]
+        
         # INHERITANCE: RECURSIVE INDUCTION ==> INSTANTIATE PARENT OBJECT
         if self.parent_name is None:
             self.parent_obj = None
@@ -174,6 +145,7 @@ class ObjectDefinition:
             if(class_def_tuple is None):
                 super().error(ErrorType.TYPE_ERROR, f"No class named '{self.parent_name}' is found.")             # TODO: Check if error catch is needed.
             self.parent_obj = ObjectDefinition(self.itp, self.parent_name, class_def_tuple)
+        
         # populate object definition with class definition
         for item in class_def:
             if item[0] == self.itp.FIELD_DEF:
@@ -234,7 +206,7 @@ class ObjectDefinition:
         return self.parent_name
 
     def get_parent_obj(self):
-        self.parent_obj
+        return self.parent_obj
 
     # JUST FOR MAIN() IN MAIN CLASS.
     def call_main_method(self, method_name):
@@ -255,9 +227,6 @@ class ObjectDefinition:
         return result[0]                                                    # Do I ever do anything with this result?
     
     # TODO: HANDLE FUNCTION OVERLOADING HERE. USE TYPE SIGNATURE TO SEARCH FOR THE RIGHT METHOD_DEF TO RETURN.
-    # Call statement uses the returned method_def. New scope would still only be the current object's fields & method's params.
-    # So, current object is not messing with the private fields of its superclasses.
-    # Find method's definition by method name.
     def __find_method(self, method_name):                                  # returns: ['return_type', [[type1, param1], [type2, param2], ..], ['top-level statement']]
         # Return dictionary {signature: method_def} of methods within current class that match method_name.
         dict_of_methods = self.my_methods.get(method_name)
@@ -770,102 +739,6 @@ class ObjectDefinition:
             call_scope_vars[param_name] = (param_var, obj_args[i])
 
         # ----NEW CODE -----------------------------------------------------------------------------------------------------
-
-        # ----ORIGINAL, BEFORE PARAM INIT ----------------------------------------------------------------------------------
-
-        # # 'target_object_name' is either 'me' or a member variable that holds an object reference.
-        # # Use 'self' to find method or retrieve 'object reference' get its method's definition.
-        # if(target_object_name == self.itp.ME_DEF):
-        #     method_def = self.__find_method(method_name)
-        # else:
-        #     # retrieve value from variable
-        #     target_object = self.__evaluate_expression(target_object_name, [self.my_fields])
-        #     # check if value is an object reference
-        #     if(type(target_object) != ObjectDefinition):
-        #         self.itp.error(ErrorType.FAULT_ERROR, "Target object must be an object reference.")
-        #     # use object reference
-        #     method_def = target_object.__find_method(method_name)
-
-        
-        # # Check if method is undefined.
-        # if(method_def is None):
-        #     self.itp.error(ErrorType.NAME_ERROR, f"Cannot find method with the name '{method_name}'.")
-        # # method_def == ['return_type', [[type1, param1], [type2, param2], ..], ['top-level statement']]
-        # Check if number of arguments matches number of parameters.
-        # parameters = method_def[1]
-        # if(len(parameters) != len(arguments)):
-        #     self.itp.error(ErrorType.TYPE_ERROR, f"You passed in {len(arguments)} argument(s) for {len(parameters)} parameter(s).")
-        # # TODO: Check for duplicate parameter names. Is this an error I should be checking?? Can't find it on spec.
-        # unique_param_names = set()
-        # for param in parameters:
-        #     if param[1] in unique_param_names:
-        #         self.itp.error(ErrorType.NAME_ERROR, f"Duplicate formal parameter name '{param[1]}'.")
-        #     else:
-        #         unique_param_names.add(param[1])
-        # # # Arguments can be constants, variables, or expressions. Process them with parent's scope before creating new lexical environment.
-        # eval_args = []
-        # for arg in arguments:
-        #     eval_args.append(self.__evaluate_expression(arg, parent_scope_vars))
-        # # Map parameters to arguments; add them to dictionary of visible variables (in-scope) for method call (make lex enviro)
-        # # Fields are always in-scope, unless shadowed.
-        # if(target_object_name == self.itp.ME_DEF):
-        #     call_scope_vars = self.my_fields
-        # else:
-        #     call_scope_vars = target_object.my_fields
-        
-        # Initialize and add parameters to in-scope variables. Accounts for parameters shadowing fields. 
-        # # I think the parameter names are shared across all objects of same class,
-        # # but this key is creating a new pool of visible variables for each method call, so PBV should still hold. 
-        # # MARK
-        # # Create value_def object for each value processed by evaluated expression.
-        # obj_args = []
-        # for arg in eval_args:
-        #     obj_args.append(create_value_object(arg))
-
-        # ----ORIGINAL, BEFORE PARAM INIT ----------------------------------------------------------------------------------
-            
-        # Append value_def object IFF its type matches parameter type. Otherwise, raise error.
-        # for i in range(len(parameters)):
-        #     param_type = parameters[i][0]
-        #     param_name = parameters[i][1]
-        #     param_var = create_var_object(param_type, param_name)
-        #     param_var_type = param_var.get_type()
-        #     # obj_args[i] are val_def objects!
-        #     arg_type = obj_args[i].get_type()
-
-        #     # TYPE CHECKING PARAMETER INITIALIZATION / TYPE CHECKING ASSIGNMENTS:
-        #     # TODO: This does not account for POLYMORPHISM yet.
-        #     if(arg_type != param_var_type):
-        #         self.itp.error(ErrorType.NAME_ERROR, f"Parameter of type '{param_var_type}' cannot be assigned to a value of type '{arg_type}'.")
-        #     elif(arg_type == InterpreterBase.CLASS_DEF):
-        #         # Null can be assigned to any variables holding any type of object reference.
-        #         # Value can be assigned to variable if value's class type is the same or is a subclass of variable's class type.
-        #         if(obj_args[i].get_value() == InterpreterBase.NULL_DEF
-        #             or obj_args[i].get_class_name() == param_var.get_class_name()
-        #             or is_subclass(param_var.get_class_name(), obj_args[i].get_value())):
-        #             call_scope_vars[param_name] = (param_var, obj_args[i])
-
-        #             # idk = self.my_fields[param_name]
-        #             # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
-
-        #         # # Null can be assigned to any variables holding any type of object reference.
-        #         # if(obj_args[i].get_value() == InterpreterBase.NULL_DEF):
-        #         #     call_scope_vars[param_name] = (param_var, obj_args[i])
-
-        #         # # if: variable and value are of the same class type.
-        #         # elif(obj_args[i].get_class_name() == param_var.get_class_name()):
-        #         #     call_scope_vars[param_name] = (param_var, obj_args[i])
-        #         #     # idk = self.my_fields[param_name]
-        #         #     # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
-        #         # # elif: value's class is derived from of variable's class
-        #         # # elif True:
-        #         # #     print("CALL STATEMENT -- CHECK FOR POLYMORPHISM HERE.")
-        #         # # else: error
-        #         else:
-        #             self.itp.error(ErrorType.NAME_ERROR, f"'{obj_args[i].get_class_name()}' is not the same as or derived from class '{param_var.get_class_name()}'.")
-        #     # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
-        #     else:
-        #         call_scope_vars[param_name] = (param_var, obj_args[i])
         
         # CREATE LEXICAL ENVIRONMENT: START WITH STACK CONTAINING DICTIONARY CONTAINING FIELDS & PARAMS
         in_scope_vars = [call_scope_vars]
@@ -881,9 +754,11 @@ class ObjectDefinition:
             returned_val = self.__run_statement(top_level_statement[0:len(top_level_statement[0])], in_scope_vars)
         else:
             returned_val = self.__run_statement(top_level_statement, in_scope_vars)
+        
         # Based on whether or not a return statement ran, we set the second element of all possible return tuples.
         # Still need to keep this 'status' consistent to terminate functions if nested statements terminated early.
         return_status = returned_val[1]
+        
         # MARK
         # Set up default return tuples.
         # Only VOID functions do not return a value (just return statement, no return expression).
@@ -901,6 +776,7 @@ class ObjectDefinition:
         # otherwise, return type is a class
         else:
             default_returned_val = (InterpreterBase.NULL_DEF, return_status)
+        
         # either return returned_val or default_returned_val
         # if non-void functions:
         if(return_type != InterpreterBase.VOID_DEF):
@@ -998,6 +874,7 @@ class ObjectDefinition:
         # does not modify original dictionary in outer 'let' statements
         # so, once we return to outer 'let' statements, their pool of variables would not have this newly appended dict
         in_scope_vars = in_scope_vars + [local_dict]
+        
         # run the substatements with this pool of variables (similar to begin statement)
         # initially returned_val[1] == False since we just started the 'let' statement (no return statement could have ran)
         returned_val = (None, False)
