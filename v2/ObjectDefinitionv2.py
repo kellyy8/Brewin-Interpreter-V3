@@ -10,6 +10,9 @@ def create_value_object(val):
     # values can be primitives (int, string, bool), object references (class/subclass), or null
     if (type(val) == ObjectDefinition):
         return ValueDefinition(InterpreterBase.CLASS_DEF, val, val.get_object_type())
+    # NULL TYPE TAG
+    elif(type(val) == tuple):
+        return ValueDefinition(InterpreterBase.CLASS_DEF, val[0], val[1])
     elif val == InterpreterBase.NULL_DEF:
         return ValueDefinition(InterpreterBase.CLASS_DEF, val)
     elif val[0] == '"':
@@ -318,6 +321,9 @@ class ObjectDefinition:
         # expression is function 'call' statement (funcs can return nothing or what eval_expr can return)
         if(expression[0]==self.itp.CALL_DEF):
             returned_val = self.__execute_call_statement(expression[1:], in_scope_vars)
+            # NULL TYPE TAG
+            if(returned_val[0] == InterpreterBase.NULL_DEF):
+                return (returned_val[0], returned_val[2])           # (null, return_type)
             return returned_val[0]
         
         # expression is 'new' object instantiation
@@ -444,6 +450,13 @@ class ObjectDefinition:
         for arg in statement:
             # expressions evaluating to str, int, bool values wrapped in ''
             result = self.__evaluate_expression(arg, in_scope_vars)
+
+            # if result is None:
+            #     print(None)
+            #     continue
+
+            if type(result) == tuple:
+                result = result[0]
 
             # if result != 'null':
             #     print("print statement prints:", result.get_object_type())
@@ -622,8 +635,14 @@ class ObjectDefinition:
                 elif(new_val_type == InterpreterBase.CLASS_DEF):
                     # Null can be assigned to any variables holding any type of object reference.
                     # Value can be assigned to variable if value's class type is the same or is a subclass of variable's class type.
-                    if(new_val_obj.get_value() == InterpreterBase.NULL_DEF
-                       or new_val_obj.get_class_name() == var_to_update_obj.get_class_name()
+                    if(new_val_obj.get_value() == InterpreterBase.NULL_DEF):
+                        if(type(new_val) == tuple):
+                            if (var_to_update_obj.get_class_name() != new_val[1]):
+                                self.itp.error(ErrorType.TYPE_ERROR, f"'{new_val[1]}' is not the same as or derived from class '{var_to_update_obj.get_class_name()}'.")
+                        else:
+                            in_scope_vars[which_dict][var_name] = (var_to_update_obj, new_val_obj)
+                            return
+                    if(new_val_obj.get_class_name() == var_to_update_obj.get_class_name()
                        or is_subclass(var_to_update_obj.get_class_name(), new_val_obj.get_value())):
                         in_scope_vars[which_dict][var_name] = (var_to_update_obj, new_val_obj)
                         return
@@ -780,7 +799,7 @@ class ObjectDefinition:
             default_returned_val = (None, return_status)
         # otherwise, return type is a class
         else:
-            default_returned_val = (InterpreterBase.NULL_DEF, return_status)
+            default_returned_val = (None, return_status, return_type)
         
         # either return returned_val or default_returned_val
         # if non-void functions:
@@ -804,8 +823,11 @@ class ObjectDefinition:
                     if(val_type != InterpreterBase.CLASS_DEF):
                         self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
 
-                    # Can return null, or a value whose class type is the same or is a subclass of return class type.
-                    if(val.get_value() == InterpreterBase.NULL_DEF or val.get_class_name() == return_type
+                    # NULL TYPE TAG: Return value == null or object whose class type is the same or is a subclass of return class type.
+                    if(val.get_value() == InterpreterBase.NULL_DEF):
+                        return (val.get_value(), return_status, return_type)
+                    
+                    if(val.get_class_name() == return_type
                        or is_subclass(return_type, val.get_value())):
                         return (val.get_value(), return_status)
 
