@@ -1,9 +1,6 @@
 from intbase import InterpreterBase, ErrorType
 from ValueDefinitionv2 import ValueDefinition
 from VariableDefinitionv2 import VariableDefinition
-# parser:
-# [ 'field', 'type_name', 'field_name', 'init_value']
-# [ 'method', 'return_type', 'name', [[type1, param1], [type2, param2], ..], ['top-level statement'] ]
 
 # When assigning a value to a variable (field init, param init, reassignment), define a value_def object for the value.
 def create_value_object(val):
@@ -12,7 +9,7 @@ def create_value_object(val):
         return ValueDefinition(InterpreterBase.CLASS_DEF, val, val.get_object_type())
     # NULL TYPE TAG
     elif(type(val) == tuple):
-        return ValueDefinition(InterpreterBase.CLASS_DEF, val[0], val[1])
+        return ValueDefinition(InterpreterBase.CLASS_DEF, val, val[1])
     elif val == InterpreterBase.NULL_DEF:
         return ValueDefinition(InterpreterBase.CLASS_DEF, val)
     elif val[0] == '"':
@@ -51,7 +48,8 @@ def create_args_type_signature(args_list):
     for arg in args_list:
         arg_val = arg.get_value()
         arg_type = arg.get_type()
-        # instances or null
+        
+        # instances or null; always store null if value is null :) (NULL TYPE TAG)
         if arg_type == InterpreterBase.CLASS_DEF:
             if type(arg_val) == tuple:
                 signature += [arg_val[0]]
@@ -65,15 +63,6 @@ def create_args_type_signature(args_list):
     
     signature = " ".join(signature)
     return signature
-
-# need this because val_def objects have value == null; cannot use their value (non obj_def) to determine if is_subclass True or False
-def is_subclass_for_null_objects(itp, var_class, null_class):
-    class_def_tuple = itp.__find_class_definition__(null_class)
-    if(class_def_tuple is None):
-        itp.error(ErrorType.TYPE_ERROR, f"No class named '{null_class}' is found.")             # TODO: Check if error catch is needed.
-    
-    obj_def = ObjectDefinition(itp, null_class, class_def_tuple)
-    return is_subclass(var_class, obj_def)
 
 # TYPE CHECKING: PARAMETER INITIALIZATION
 def valid_args_passed(itp, params_sig, args_sig, args_list):
@@ -106,13 +95,17 @@ def valid_args_passed(itp, params_sig, args_sig, args_list):
         else:
             # Check NULL TYPE TAG -- args_list[i] holds val_def with val == null and class_name == return_type/None
             if(at == InterpreterBase.NULL_DEF):
-                if(pt != args_list[i].get_class_name() and not is_subclass_for_null_objects(itp, pt, args_list[i].get_class_name())):
-                    return False
-                else:
-                    return True
-
-            # if(at != InterpreterBase.NULL_DEF and pt != at and not is_subclass(pt, args_list[i].get_value())):
-            if(pt != at and not is_subclass(pt, args_list[i].get_value())):
+                null_type_tag = arg_obj.get_class_name()
+                
+                # if null has a type tag, check it
+                if(null_type_tag is not None):
+                    if(pt != null_type_tag and not is_subclass_for_null_objects(itp, pt, null_type_tag)):
+                        return False
+                    else:
+                        return True
+            
+            # at holds an object reference; check if object's type matches parameter or is a subtype
+            elif(pt != at and not is_subclass(pt, arg_obj.get_value())):
                 return False
 
     return True
@@ -130,6 +123,17 @@ def get_method_params_signature_from_dict(itp, d, args_sig, args_list):
     
     return None
 
+# TODO: FOR POLYMORPHISM CHECKING & NULL TYPE TAG
+# need this because val_def objects have value == null; cannot use their value (non obj_def) to determine if is_subclass True or False
+def is_subclass_for_null_objects(itp, var_class, null_class):
+    # null_class the class type of the null objects (like int nullptr, string nullptr in C++...)
+    class_def_tuple = itp.__find_class_definition__(null_class)
+    if(class_def_tuple is None):
+        itp.error(ErrorType.TYPE_ERROR, f"No class named '{null_class}' is found.")             # TODO: Check if error catch is needed.
+    
+    obj_def = ObjectDefinition(itp, null_class, class_def_tuple)
+    return is_subclass(var_class, obj_def)
+
 # TODO: FOR POLYMORPHISM CHECKING
 def is_subclass(var_class, val_obj):
     # var_class == class_name; val_obj == ObjectDefinition object (extracted from ValueDefinition object's value)
@@ -142,13 +146,19 @@ def is_subclass(var_class, val_obj):
         if(parent_name == var_class):
             return True
         else:
-            parent_obj = parent_obj.get_parent_obj()
             if parent_obj is None:
                 break
+            # get name of parent's parent (next two levels; current parent still does not match var_class)
             parent_name = parent_obj.get_parent_name()
+            parent_obj = parent_obj.get_parent_obj()
+
 
     # val_def object's type IS NOT A SUBCLASS of variable's class type
     return False
+
+# parser:
+# [ 'field', 'type_name', 'field_name', 'init_value']
+# [ 'method', 'return_type', 'name', [[type1, param1], [type2, param2], ..], ['top-level statement'] ]
 
 class ObjectDefinition:
     def __init__(self, interpreter, class_name, class_def_tuple):
@@ -188,12 +198,12 @@ class ObjectDefinition:
                     field_var_type = field_var.get_type()                       # do this because it's gonna be diff from type_name if field holds object references
                     init_val_type = init_val.get_type()
 
-                    # For fields, values are not object references. They are either constants or null. Init value ≠ expressions; just constants.
+                    # For fields, values are not object references. They are either constants or null. Init value ≠ expressions.
                     # Variable types: int, string, bool, class.
                     # Value types: int, string, bool, class (null constant)
                     if(init_val_type != field_var_type):
                         self.itp.error(ErrorType.TYPE_ERROR, f"Field of type '{field_var_type}' cannot be initialized with a value of type '{init_val_type}'.")
-                    # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
+                    # Otherwise, value is primitive or null. Null constants (no type tags) can be assigned to any variables holding any type of object reference.
                     else:
                         self.my_fields[field_name] = (field_var, init_val)
 
@@ -203,7 +213,7 @@ class ObjectDefinition:
                     self.itp.error(ErrorType.NAME_ERROR, "Methods cannot share the same name.")
                 # map method name to its whole definition (return, params, statements)
                 else:
-                    method_def = [item[1]] + item[3:]
+                    method_def = [item[1]] + item[3:]       # return type & params & statements
                     params_list = item[3]
                     signature = create_method_param_type_signature(params_list)
                     if method_name in self.my_methods:
@@ -260,6 +270,7 @@ class ObjectDefinition:
     # Get top_level statement (single statement or 'begin' with substatements).
     def get_top_level_statement(self, method_def):
         return method_def[2]                                                # method_def = ['return_type', [[params]], [top level statement]]
+    
     # runs/interprets the passed-in statement until completion and gets the result, if any
     def __run_statement(self, statement, in_scope_vars=None):
         # in_scope_vars = [self.my_fields] by default --> arg passed in if there are params in addition to fields that are visible
@@ -311,16 +322,17 @@ class ObjectDefinition:
                 if(var is not None):
                     # extract the value from value_def object & return it; ends loop and function (no error)
                     value_obj = var[1]
+
                     # print("value:", value_obj.get_value())
-                    return value_obj.get_value()
+                    return value_obj.get_value()                 # will be a tuple if we have null with a NULL TYPE TAG
             
             # this line only runs if we searched through each scope dictionary and did not find variable with such name
             self.itp.error(ErrorType.NAME_ERROR, f"No variable with the name '{expr}'.")
             
     # Variables can hold constants and object references. 
     def __convert_operands_from_parsed_form(self, op):
-        # MARK -- DEPENDS ON HOW OP IS PASSED IN.
-        if (type(op) == ObjectDefinition):
+        # OP can be null with NULL TYPE TAG.
+        if (type(op) == ObjectDefinition or type(op) == tuple):
             return op
         elif op[0] == '"':
             return op[1:-1]
@@ -345,7 +357,7 @@ class ObjectDefinition:
             # NULL TYPE TAG
             if(returned_val[0] == InterpreterBase.NULL_DEF):
                 return (returned_val[0], returned_val[2])           # (null, return_type)
-            return returned_val[0]
+            return returned_val[0]                                  # null without type tag, constant, or object_def
         
         # expression is 'new' object instantiation
         if(expression[0]==self.itp.NEW_DEF):                         # [new, class_name]
@@ -355,6 +367,7 @@ class ObjectDefinition:
             
             instance = ObjectDefinition(self.itp, expression[1],class_def_tuple)
             return instance
+        
         # expression is arithmetics, concatenation, or comparison (parameter is a list)
         add_op = {'+'}
         math_ops = {'-', '*', '/', '%'}
@@ -378,35 +391,41 @@ class ObjectDefinition:
                     op = self.__evaluate_expression(op, in_scope_vars)
                 else:
                     op = self.__get_const_or_var_val(op, in_scope_vars)
-                if op!=self.itp.TRUE_DEF and op!=self.itp.FALSE_DEF:
+                
+                if type(op) == tuple or (op!=self.itp.TRUE_DEF and op!=self.itp.FALSE_DEF):
                     self.itp.error(ErrorType.TYPE_ERROR, "Unary operations only works with boolean operands.")
                 elif op==self.itp.TRUE_DEF:
                     stack.append(self.itp.FALSE_DEF)
                 else:
                     stack.append(self.itp.TRUE_DEF)
+            
             # perform operation
             elif expr in all_ops:
                 op1 = stack.pop()
                 op2 = stack.pop()
+
                 # set up operand for nested expressions: returned value of function, variable, or constant
                 if type(op1)==list:
                     op1 = self.__evaluate_expression(op1, in_scope_vars)
                 else:
                     op1 = self.__get_const_or_var_val(op1, in_scope_vars)
+
                 if type(op2)==list:
                     op2 = self.__evaluate_expression(op2, in_scope_vars)
                 else:
                     op2 = self.__get_const_or_var_val(op2, in_scope_vars)
+                
                 # Convert op1 and op2 into int, string, or bool constants, null, or object reference.
                 op1 = self.__convert_operands_from_parsed_form(op1)
                 op2 = self.__convert_operands_from_parsed_form(op2)
                 
-                # TYPE CHECKING: ASSIGNMENTS/COMPARISONS
+                # TYPE CHECKING: COMPARISONS
                 # check for type compatibility & operand compatibility
                 if expr=='+' and not(type(op1)==int and type(op2)== int) and not(type(op1)==str and type(op2)==str):
                     self.itp.error(ErrorType.TYPE_ERROR, "'+' only works with integers and strings.")
                 elif expr in math_ops and (type(op1) != int or type(op2) != int):
                     self.itp.error(ErrorType.TYPE_ERROR, "Math operations only compatible with integers.")
+                
                 # TODO: Object references (classes/subclasses) are compatible with == and !=. HANDLE POLYMORPHISM HERE.
                 elif expr in compare_ops:
                     if (expr in only_bool_compare_ops):
@@ -417,10 +436,22 @@ class ObjectDefinition:
                             self.itp.error(ErrorType.TYPE_ERROR, "Operands must both be integers or strings.")
                     else:
                         # Return error if operands do not match, and neither operands are 'null'.
-                        if(type(op1)!=type(op2)):
-                            if(op1 is not None and op2 is not None):
-                                self.itp.error(ErrorType.TYPE_ERROR, "Operands must match for '==' or '!='. Null vs object reference are the only exceptions.")
+                        # null == null is true (regardless of NULL TYPE TAGs)
+
+                        # Can only compare null with/without type tag with an object or another null with/without type tag
+                        if(type(op1)==tuple or op1==None):
+                            if(type(op2)!=ObjectDefinition and type(op2)!=tuple and op2!=None):
+                                self.itp.error(ErrorType.TYPE_ERROR, "Line 443: Operands must match for '==' or '!='. Null vs object reference are the only exceptions.")
+                        elif(type(op2)==tuple or op2==None):
+                            if(type(op1)!=ObjectDefinition and type(op1)!=tuple and op1!=None):
+                                self.itp.error(ErrorType.TYPE_ERROR, "Line 446: Operands must match for '==' or '!='. Null vs object reference are the only exceptions.")   
+                        
+                        # otherwise, types must match since objects can be compared to null^ or other objects & primitives can only be compared to primitives
+                        elif(type(op1)!=type(op2)):
+                            self.itp.error(ErrorType.TYPE_ERROR, "Line 450: Operands must match for '==' or '!='. Null vs object reference are the only exceptions.")
+
                         # Types match. If operands are object references, check that their class types match or are related (subclass).
+                        # Otherwise, operands are primitives and comparision can proceed since their type matches.
                         elif(type(op1)==ObjectDefinition):
                             # if class types do not match & classes are not related (subclass; polymorphism) --> error
                             # TODO: HANDLE POLYMORPHISM HERE. CHECK THAT CLASSES ARE RELATED
@@ -452,6 +483,7 @@ class ObjectDefinition:
                     case '!=': result = op1 != op2
                     case '&': result = op1 & op2              #TODO: check if this a correct translation lol
                     case '|': result = op1 | op2
+                
                 # reformat to the way ints, bools, and strings are represented
                 if(type(result)==int):
                     result = str(result)
@@ -460,7 +492,9 @@ class ObjectDefinition:
                 elif(type(result)==bool):
                     if(result): result = self.itp.TRUE_DEF
                     else: result = self.itp.FALSE_DEF
+                
                 stack.append(result)
+            
             # store operand into stack
             else:
                 stack.append(expr)
@@ -477,6 +511,7 @@ class ObjectDefinition:
             #     print(None)
             #     continue
 
+            # null object with NULL TYPE TAG
             if type(result) == tuple:
                 result = result[0]
 
@@ -496,6 +531,7 @@ class ObjectDefinition:
         var_name = statement
         new_val = self.itp.get_input()
         new_val = create_value_object(new_val)
+
         # ASSUMING that var_name is valid (there is a variable with that name for sure)
         # grab var_def object for type checking --> LIFO; search from most recently added dictionary
         which_dict = None
@@ -514,6 +550,7 @@ class ObjectDefinition:
         # TODO: Check: don't we assume that input is of correct type?
         elif(new_val.get_type() != InterpreterBase.INT_DEF):
             self.itp.error(ErrorType.TYPE_ERROR, f"Variable expects 'int', but value is of type '{new_val.get_type()}'.")
+        
         # update var_def object with val_def object
         in_scope_vars[which_dict][var_name] = (var, new_val)
     
@@ -521,6 +558,7 @@ class ObjectDefinition:
         var_name = statement
         new_val = '"' + self.itp.get_input() + '"'
         new_val = create_value_object(new_val)
+        
         # ASSUMING that var_name is valid (there is a variable with that name for sure)
         # grab var_def object for type checking --> LIFO; search from most recently added dictionary
         which_dict = None
@@ -539,11 +577,13 @@ class ObjectDefinition:
         # TODO: Check: don't we assume that input is of correct type?
         elif(new_val.get_type() != InterpreterBase.STRING_DEF):
             self.itp.error(ErrorType.TYPE_ERROR, f"Variable expects 'string', but value is of type '{new_val.get_type()}'.")
+        
         # update var_def object with val_def object
         in_scope_vars[which_dict][var_name] = (var, new_val)
     
     def __execute_if_statement(self, statement, in_scope_vars):            # [if, [[condition], [if-body], [else-body]]]
         condition_result = self.__evaluate_expression(statement[0], in_scope_vars)
+        
         # condition is not a boolean
         if(condition_result != self.itp.TRUE_DEF and condition_result != self.itp.FALSE_DEF):
             self.itp.error(ErrorType.TYPE_ERROR, "Condition of the if statement must evaluate to a boolean type.")
@@ -569,7 +609,7 @@ class ObjectDefinition:
                 return self.__run_statement(else_body, in_scope_vars)
         # condition fails and there's NO else-body
         else:
-            # return empty string (aka nothing); if no if/else body ran, no return statement would have ran & no value returned
+            # return nothing (None); if no if/else body ran, no return statement would have ran & no value returned
             returned_val = (None, False)
             return returned_val
     
@@ -598,7 +638,7 @@ class ObjectDefinition:
     
     def __execute_return_statement(self, statement, in_scope_vars):            # [return] or [return, [expression]]
         # HANDLE TERMINATION
-        # handle 'return me' statement
+        # TODO: handle 'return me' statement
         if statement == InterpreterBase.ME_DEF:
             return (self.itp.get_caller(), True)
         
@@ -625,6 +665,7 @@ class ObjectDefinition:
             # no more statements should be ran since inner scope terminated 
             else:
                 break
+        
         # if a nested return statement ran, propagates returned_val tuple up
         # else, returns (None, False) for sure since no return statement ran
         return returned_val
@@ -632,6 +673,7 @@ class ObjectDefinition:
     def __execute_set_statement(self, statement, in_scope_vars):               # [set, var_name, new_value]
         var_name = statement[0]
         new_val = statement[1]
+        
         # LIFO; search from most recently added dictionary
         which_dict = None
         for i in range(len(in_scope_vars)-1, -1, -1):
@@ -641,7 +683,7 @@ class ObjectDefinition:
             # if variable exists:
             if (var is not None):
                 which_dict = i
-                # evaluate new value
+                # evaluate new value (can be a tuple <-- null with type tag)
                 new_val = self.__evaluate_expression(new_val, in_scope_vars)  # eval_expr() handles everything set receives as new_val arg
                 # create val_def object for new value
                 new_val_obj = create_value_object(new_val)
@@ -655,30 +697,39 @@ class ObjectDefinition:
                 # TODO: Need to handle POLYMORPHISM.
                 if(new_val_type != var_to_update_type):
                     self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_to_update_type}', but value is of type '{new_val_type}'.")
+                
+                # new_val is either null with/without type tag or an object
                 elif(new_val_type == InterpreterBase.CLASS_DEF):
                     # TYPE CHECK NULL if it is returned from a method call. Apparently these null's differ by method's return_type.
                     # Otherwise, null can be assigned to any variables holding any type of object reference. (null can be a constant or constant stored in variable's of different class types)
+                    
                     # Value can be assigned to variable if value's class type is the same or is a subclass of variable's class type.
-                    if(new_val_obj.get_value() == InterpreterBase.NULL_DEF):
-                        if(type(new_val) == tuple):
-                            if (var_to_update_obj.get_class_name() != new_val[1]
-                                and not is_subclass_for_null_objects(self.itp, var_to_update_obj.get_class_name(), new_val[1])):
-                                self.itp.error(ErrorType.TYPE_ERROR, f"'{new_val[1]}' is not the same as or derived from class '{var_to_update_obj.get_class_name()}'.")
-                            else:
-                                in_scope_vars[which_dict][var_name] = (var_to_update_obj, new_val_obj)
-                                return
+                    
+                    # TODO: UNSURE. OTHER WAYS THAT NULL W/WITHOUT TYPE TAG CAN BE ASSIGNED?
+                    # if new_val is a null with a NULL TYPE TAG, its type tag must match or be subclass of variable's type
+                    new_val_obj_val = new_val_obj.get_value()
+                    if(type(new_val_obj_val) == tuple):
+                        null_type_tag = new_val_obj_val[1]
+                        var_type_tag = var_to_update_obj.get_class_name()
+                        if(var_type_tag != null_type_tag and not is_subclass_for_null_objects(self.itp, var_type_tag, null_type_tag)):
+                            self.itp.error(ErrorType.TYPE_ERROR, f"'{null_type_tag}' is not the same as or derived from class '{var_type_tag}'.")
                         else:
                             in_scope_vars[which_dict][var_name] = (var_to_update_obj, new_val_obj)
                             return
-                    if(new_val_obj.get_class_name() == var_to_update_obj.get_class_name()
+                    # if new val is a null with no type tag
+                    elif(new_val_obj_val == InterpreterBase.NULL_DEF):
+                        in_scope_vars[which_dict][var_name] = (var_to_update_obj, new_val_obj)
+                        return
+                    # if new val is an object, check that it is of variable's class or subclass type
+                    elif(new_val_obj.get_class_name() == var_to_update_obj.get_class_name()
                        or is_subclass(var_to_update_obj.get_class_name(), new_val_obj.get_value())):
                         in_scope_vars[which_dict][var_name] = (var_to_update_obj, new_val_obj)
                         return
                     else:
                         self.itp.error(ErrorType.TYPE_ERROR, f"'{new_val_type}' is not the same as or derived from class '{var_to_update_type}'.")
-                # Otherwise, value is primitive or null.
+                
+                # Otherwise, value is a primitive & types match.
                 else:
-                    # if it type checking passes, update the variable & return from function (don't run error statement)
                     in_scope_vars[which_dict][var_name] = (var_to_update_obj, new_val_obj)
                     # print(var_to_update.get_type(), var_to_update.get_name(), "==>", new_val.get_type(), new_val.get_value())
                     return
@@ -702,14 +753,16 @@ class ObjectDefinition:
         
         # 'target_object_name' is either 'me' or a member variable that holds an object reference.
         # Use 'self' to find method or retrieve 'object reference' get its method's definition.
+        # if self.itp.get_caller() == None:
+        #     self.itp.set_caller(self)
+        
         if(target_object_name == self.itp.ME_DEF):
-            target_object = None
+            target_object = self.itp.get_caller()
             dict_of_method_defs = self.__find_method(method_name)
             self.itp.set_caller(self)
         elif(target_object_name == InterpreterBase.SUPER_DEF):
             target_object = self.itp.get_caller()
             dict_of_method_defs = self.__find_method(method_name)
-            self.itp.set_caller(target_object)
         else:
             # retrieve value from variable
             target_object = self.__evaluate_expression(target_object_name, [self.my_fields])
@@ -728,11 +781,7 @@ class ObjectDefinition:
         # Create value_def object for each value processed by evaluated expression.
         obj_args = []
         for arg in eval_args:
-            # NULL TYPE TAG
-            if type(arg) == tuple:
-                obj_args.append(create_value_object((arg, arg[1])))
-            else:
-                obj_args.append(create_value_object(arg))
+            obj_args.append(create_value_object(arg))
 
         args_type = create_args_type_signature(obj_args)
         method_def = None
@@ -771,7 +820,6 @@ class ObjectDefinition:
         # method_def == ['return_type', [[type1, param1], [type2, param2], ..], ['top-level statement']]
 
         # TODO: Check for duplicate parameter names. Is this an error I should be checking?? Can't find it on spec.
-        
         parameters = method_def[1]
         unique_param_names = set()
         for param in parameters:
@@ -785,7 +833,7 @@ class ObjectDefinition:
         if(target_object_name == self.itp.ME_DEF):
             call_scope_vars = self.my_fields
         else:
-            call_scope_vars = target_object.my_fields
+            call_scope_vars = target_object.my_fields               # target set to super class beforehand if needed
 
         for i in range(len(parameters)):
             param_type = parameters[i][0]
@@ -831,47 +879,56 @@ class ObjectDefinition:
             default_returned_val = (None, return_status)
         # otherwise, return type is a class
         else:
-            default_returned_val = (None, return_status, return_type)
+            # TODO: Spec and barista differ...
+            default_returned_val = (InterpreterBase.NULL_DEF, return_status, return_type)
         
         # either return returned_val or default_returned_val
         # if non-void functions:
         if(return_type != InterpreterBase.VOID_DEF):
             # DOES NOT run return statement or do not return a value (no return expression):
-            if(returned_val[1] == False or returned_val[0] == None):
+            if(return_status == False or returned_val[0] == None):
                 return default_returned_val
+            
             # DOES return a value --> check compatible type
             else:
-                val = create_value_object(returned_val[0])
+                val = create_value_object(returned_val[0])              # can be a tuple
                 val_type = val.get_type()
+
                 # Primitive return type.
                 if(return_type == InterpreterBase.INT_DEF or return_type == InterpreterBase.STRING_DEF or return_type == InterpreterBase.BOOL_DEF):
                     if(val_type != return_type):
                         self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
                     else:
                         return (val.get_value(), return_status)
-                # Object reference/class return type.
+                
+                # Object reference/class return type -- can return objects/null of class/subclass type & null with no type tags. (NULL TYPE TAG)
                 else:
-                    # if: value is not an object reference, then error.
+                    # if value is not an object reference, then error.
                     if(val_type != InterpreterBase.CLASS_DEF):
                         self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val_type}'.")
 
-                    # NULL TYPE TAG: Return value == null or object whose class type is the same or is a subclass of return class type.
-                    if(val.get_value() == InterpreterBase.NULL_DEF):
+                    # NULL TYPE TAG: Null's type tag must match or be a subclass of return_type.
+                    if(type(val.get_value()) == tuple):
+                        n_tup = val.get_value()
+                        null_type_tag = n_tup[1]
+                        if(return_type != null_type_tag and not is_subclass_for_null_objects(self.itp, return_type, null_type_tag)):
+                            self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{null_type_tag}'.")
+                        else:
+                            # TODO: Check if it should be return type or original null type tag.
+                            return (n_tup[0], return_status, null_type_tag)
+                
+                    # Null without type tag (now assigned to a type tag). (NULL TYPE TAG)
+                    elif(val.get_value() == InterpreterBase.NULL_DEF):
                         return (val.get_value(), return_status, return_type)
                     
-                    if(val.get_class_name() == return_type
-                       or is_subclass(return_type, val.get_value())):
+                    # Value is an object.
+                    elif(val.get_class_name() == return_type or is_subclass(return_type, val.get_value())):
                         return (val.get_value(), return_status)
 
-                    # # if: value == null or is an object reference of class type == return type, then return value.
-                    # if(val.get_value() == InterpreterBase.NULL_DEF or val.get_class_name() == return_type):
-                    #     return (val.get_value(), return_status)
-                    # # elif: value's type is a subclass of return type, return value.
-                    # # elif ():
-                    # # HANDLE POLYMORPHISM HERE.
-                    # # else: error
+                    # Value is a null or object whose class type does not match and is not a subclass of variable's class type.
                     else:
                         self.itp.error(ErrorType.TYPE_ERROR, f"Function with return type '{return_type}' cannot return values of type '{val.get_class_name()}'.")
+        
         # void function should not return value
         else:
             if(returned_val[0] != None):
@@ -883,10 +940,12 @@ class ObjectDefinition:
         local_vars = statement[0]
         substatements = statement[1:]
         local_dict = {}                             # [ 'var_name' : (var_def obj, val_def obj) ]
+        
         for loc in local_vars:
             type_name = loc[0]
             var_name = loc[1]
             init_val = loc[2]
+            
             if (var_name in local_dict):
                 self.itp.error(ErrorType.NAME_ERROR, "No duplicate named local variables.")
             else:
@@ -901,6 +960,7 @@ class ObjectDefinition:
                 # Type mismatch == TYPE_ERROR (checked on barista)
                 if(val_obj_type != var_obj_type):
                     self.itp.error(ErrorType.TYPE_ERROR, f"Variable holds values of type '{var_obj_type}', but value is of type '{val_obj_type}'.")
+                
                 elif(val_obj_type == InterpreterBase.CLASS_DEF):
                     # Null can be assigned to any variables holding any type of object reference.
                     # Value can be assigned to variable if value's class type is the same or is a subclass of variable's class type.
@@ -908,24 +968,11 @@ class ObjectDefinition:
                        or val_obj.get_class_name() == var_obj.get_class_name()
                        or is_subclass(var_obj.get_class_name(), val_obj.get_value())):
                         local_dict[var_name] = (var_obj, val_obj)
-
-                    # # Null can be assigned to any variables holding any type of object reference.
-                    # if(val.get_value() == InterpreterBase.NULL_DEF):
-                    #     local_dict[var_name] = (var, val)
-                    # # if: variable and value are of the same class type.
-                    # elif(val.get_class_name() == var.get_class_name()):
-                    #     local_dict[var_name] = (var, val)
-                    #     # idk = self.my_fields[var_name]
-                    #     # print(idk[0].get_class_name(), idk[0].get_name(), "==>", idk[1].get_class_name(), idk[1].get_value())
-                    # # elif: value's class is derived from of variable's class
-                    # # elif True:
-                    # #     print("LET STATEMENT -- CHECK FOR POLYMORPHISM HERE.")
-                    # # else: error
                     else:
                         self.itp.error(ErrorType.TYPE_ERROR, f"'{val_obj_type}' is not the same as or derived from class '{var_obj_type}'.")
-                # Otherwise, value is primitive or null. Null can be assigned to any variables holding any type of object reference.
+                
+                # Otherwise, value is primitive. Types match, so assign value to local variable.
                 else:
-                    # if it type checking passes, update the variable & return from function (don't run error statement)
                     local_dict[var_name] = (var_obj, val_obj)
                     # print(var.get_type(), var.get_name(), "==>", val.get_type(), val.get_value())
 
