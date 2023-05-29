@@ -178,17 +178,25 @@ class ObjectDef:
             # vardef in the form of (typename varname defvalue)
             var_type = Type(var_def[0])
             var_name = var_def[1]
-            default_value = create_value(var_def[2])
-            # make sure default value for each local is of a matching type
-            self.__check_type_compatibility(
-                var_type, default_value.type(), True, line_number
-            )
+
+            # check if there is an initial value; if there isn't assign variable with default value based on var_type
+            if(len(var_def)==3):
+                default_value = create_value(var_def[2])
+                # make sure default value for each local is of a matching type
+                self.__check_type_compatibility(
+                    var_type, default_value.type(), True, line_number
+                )
+            else:
+                default_value = create_default_value(var_type)
+
+            # check for duplicate formal local var names; if not, add new local var to env
             if not env.create_new_symbol(var_name):
                 self.interpreter.error(
                     ErrorType.NAME_ERROR,
                     "duplicate local variable name " + var_name,
                     line_number,
-                )
+            )
+            
             var_def = VariableDef(var_type, var_name, default_value)
             env.set(var_name, var_def)
 

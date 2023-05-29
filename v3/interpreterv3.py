@@ -98,3 +98,17 @@ class Interpreter(InterpreterBase):
                 if item[2] == InterpreterBase.INHERITS_DEF:
                     superclass_name = item[3]
                 self.type_manager.add_class_type(class_name, superclass_name)
+
+# filename = "/Users/kellyyu/Downloads/23SP/CS131/Projects/spring-23-autograder/brew#.txt"
+# file_object = open(filename)
+# file_contents = []
+# for line in file_object:
+#     file_contents.append(line)
+# file_object.close()
+
+# inputStrings = ""
+# for item in file_contents:
+#     inputStrings += item
+
+# test = Interpreter()
+# test.run(file_contents)
