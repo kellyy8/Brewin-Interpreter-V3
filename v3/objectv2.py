@@ -173,11 +173,16 @@ class ObjectDef:
         return status, return_value  # could be a valid return of a value or an error
 
     # add all local variables defined in a let to the environment
+    # PARAMETERIZED TYPES CAN BE FOUND HERE!
     def __add_locals_to_env(self, env, var_defs, line_number):
         for var_def in var_defs:
             # vardef in the form of (typename varname defvalue)
             var_type = Type(var_def[0])
             var_name = var_def[1]
+
+            # create parameterized type if needed (1/8 oh no):
+            if self.interpreter.is_parameterized_type(var_def[0]):
+                self.interpreter.create_parameterized_type(var_def[0], line_number)
 
             # check if there is an initial value; if there isn't assign variable with default value based on var_type
             if(len(var_def)==3):
