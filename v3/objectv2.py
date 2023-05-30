@@ -165,11 +165,6 @@ class ObjectDef:
 
     # NEW CODE ---- for exception handling ----------------------------------------
 
-    # TODO: Check control flow. Use test cases.
-        # Throw not inside try-catch block.
-        # Throw inside 1 try-catch block.
-        # Nested throws -- check on exception variable (shadowing, etc.)
-
     # (throw <string>)
     def __execute_throw(self, env, code):
         self.exception = self.__evaluate_expression(env, code[1], code[0].line_num)
@@ -180,7 +175,6 @@ class ObjectDef:
         return ObjectDef.STATUS_EXCEPTION_THROWN, None
 
     # (try (try-statement) (catch-statement))
-    # TODO: Handle scoping for exception variable. Use env, rather member var lol?
     # TODO: Check parameters. Do I need return_value lol.
     def __execute_try(self, env, return_type, code):
         try_statement = code[1]
@@ -195,13 +189,21 @@ class ObjectDef:
             # exception is caught
             status = ObjectDef.STATUS_PROCEED
 
-            # TODO: Might do this initialization in throw statement.
-            # TODO: Remove the variable in catch block statement? Cus it might cause errors -- redefinition of exception var.
-            # add exception variable into env
-            exception_var_def = [[InterpreterBase.STRING_DEF, 'exception', '"' + self.exception.v + '"']]
-
+            # create new_env (new scope) & add/update (update to shadow) exception variable into new_env
             new_env = copy.deepcopy(env)
-            self.__add_locals_to_env(new_env, exception_var_def, code[0].line_num)
+
+            var_def = new_env.get('exception')
+            if var_def is None:
+                exception_var_def = [[InterpreterBase.STRING_DEF, 'exception', '"' + self.exception.v + '"']]
+                self.__add_locals_to_env(new_env, exception_var_def, code[0].line_num)
+            else:
+                var_type = Type(InterpreterBase.STRING_DEF)
+                val_obj = Value(var_type, '"' + self.exception.v + '"')
+
+                # varDef params: type object, string var name, value object
+                var_obj = VariableDef(var_type, 'exception', val_obj)
+
+                new_env.set('exception', var_obj)
 
             # if exception returns from method, status == STATUS_RETURN
             # if uncaught exception thrown, status == STATUS_EXCEPTION_THROWN
