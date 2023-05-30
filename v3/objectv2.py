@@ -173,14 +173,14 @@ class ObjectDef:
         return status, return_value  # could be a valid return of a value or an error
 
     # add all local variables defined in a let to the environment
-    # PARAMETERIZED TYPES CAN BE FOUND HERE!
+    # PARAMETERIZED TYPES CAN BE CREATED HERE! -- local vars
     def __add_locals_to_env(self, env, var_defs, line_number):
         for var_def in var_defs:
             # vardef in the form of (typename varname defvalue)
             var_type = Type(var_def[0])
             var_name = var_def[1]
 
-            # create parameterized type if needed (1/8 oh no):
+            # create parameterized type if needed:
             if self.interpreter.is_parameterized_type(var_def[0]):
                 self.interpreter.create_parameterized_type(var_def[0], line_number)
 
@@ -225,9 +225,14 @@ class ObjectDef:
             env, code[1], val, code[0].line_num
         )  # checks/reports type and name errors
         return ObjectDef.STATUS_PROCEED, None
-
+    
+    # PARAMETERIZED TYPES CAN BE CREATED HERE!
     # (return expression) where expresion could be a value, or a (+ ...)
     def __execute_return(self, env, return_type, code):
+        # # create parameterized type if needed:
+        # if self.interpreter.is_parameterized_type(return_type.get_type_name()):
+        #     self.interpreter.create_parameterized_type(return_type.get_type_name())
+
         if len(code) == 1:
             # [return] with no return value; return default value for type
             return ObjectDef.STATUS_RETURN, None

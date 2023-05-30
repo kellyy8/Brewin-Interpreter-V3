@@ -39,7 +39,13 @@ class Interpreter(InterpreterBase):
     # user passes in the line number of the statement that performed the new command so we can generate an error
     # if the user tries to new an class name that does not exist. This will report the line number of the statement
     # with the new command
+
+    # PARAMETERIZED TYPES CAN BE CREATED HERE! -- object instantations
     def instantiate(self, class_name, line_num_of_statement):
+        # create parameterized type if needed:
+        if self.is_parameterized_type(class_name):
+            self.create_parameterized_type(class_name)
+        
         if class_name not in self.class_index:
             super().error(
                 ErrorType.TYPE_ERROR,
@@ -154,7 +160,9 @@ class Interpreter(InterpreterBase):
         else:
             # retrieve the template's definition stored in interpreter's tclass_index dictionary
             tclass_stored = self.tclass_index[tclass_name]
-            ptypes_to_assign = tclass_stored[0]
+            ptypes_to_assign = []
+            for pt in tclass_stored[0]:
+                ptypes_to_assign.append(pt)
 
             # when template class uses itself as a type in its definition, assign it with new parameterized type
             tclass_str_to_assign = tclass_name
@@ -172,7 +180,10 @@ class Interpreter(InterpreterBase):
 
             for item in tclass_def:
                 if item[0] == InterpreterBase.FIELD_DEF:
-                    field_def = item
+                    field_def = []
+                    for i in item:
+                        field_def.append(i)
+
                     field_type = field_def[1]
 
                     # TODO: Can parameterized types have the same name?
@@ -182,9 +193,13 @@ class Interpreter(InterpreterBase):
                         field_def[1] = assigned_type             # only changes elements in field_def
                     
                     class_def.append(field_def)
+                    # print("FD", field_def)
 
                 elif item[0] == InterpreterBase.METHOD_DEF:
-                    method_def = item[0:3]
+                    method_def = []
+                    for i in item[0:3]:
+                        method_def.append(i)
+                    
                     return_type = method_def[1]
 
                     # check if return type is parameterized type
@@ -198,6 +213,8 @@ class Interpreter(InterpreterBase):
                         method_def.append(b)
                     class_def.append(method_def)
         
+                    # print("MD", method_def)
+
             # add parameterized class type to list of valid class types
             self.type_manager.add_class_type(tclass_str, None)
             # add its definition to dictionary of classes -> ClassDef's
