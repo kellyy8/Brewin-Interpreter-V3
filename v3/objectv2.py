@@ -199,12 +199,14 @@ class ObjectDef:
             # TODO: Remove the variable in catch block statement? Cus it might cause errors -- redefinition of exception var.
             # add exception variable into env
             exception_var_def = [[InterpreterBase.STRING_DEF, 'exception', '"' + self.exception.v + '"']]
-            self.__add_locals_to_env(env, exception_var_def, code[0].line_num)
+
+            new_env = copy.deepcopy(env)
+            self.__add_locals_to_env(new_env, exception_var_def, code[0].line_num)
 
             # if exception returns from method, status == STATUS_RETURN
             # if uncaught exception thrown, status == STATUS_EXCEPTION_THROWN
             # else status == STATUS_PROCEED
-            status, return_value = self.__execute_statement(env, return_type, catch_statement)
+            status, return_value = self.__execute_statement(new_env, return_type, catch_statement)
 
         return status, return_value
 
@@ -275,7 +277,7 @@ class ObjectDef:
     # where params are expressions, and expresion could be a value, or a (+ ...)
     # statement version of a method call; there's also an expression version of a method call below
     def __execute_call(self, env, code):
-        # TODO: CHANGE STATUS RETURN
+        # if status == STATUS_EXCEPTION_THROW, propagate it up!
         status = ObjectDef.STATUS_PROCEED
         return_value = self.__execute_call_aux(env, code, code[0].line_num)
         if type(return_value)==tuple:
