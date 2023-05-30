@@ -10,6 +10,7 @@ class ObjectDef:
     # statement execution results
     STATUS_PROCEED = 0
     STATUS_RETURN = 1
+    STATUS_EXCEPTION_THROWN = 2
 
     # type constants
     INT_TYPE_CONST = Type(InterpreterBase.INT_DEF)
@@ -20,6 +21,7 @@ class ObjectDef:
     def __init__(self, interpreter, class_def, anchor_object=None, trace_output=False):
         self.interpreter = interpreter  # objref to interpreter object. used to report errors, get input, produce output
         self.class_def = class_def
+        self.exception = None
 
         if anchor_object is None:
             self.anchor_object = self
@@ -95,6 +97,11 @@ class ObjectDef:
         # value back to the caller
         if status == ObjectDef.STATUS_RETURN and return_value is not None:
             return return_value
+        
+        # TODO: Check if this return value will cause errors. 
+        if status == ObjectDef.STATUS_EXCEPTION_THROWN:
+            return status, None
+
         # The method didn't explicitly return a value, so return the default return type for the method
         return create_default_value(method_def.get_return_type())
 
@@ -143,11 +150,65 @@ class ObjectDef:
             return self.__execute_print(env, code)
         elif tok == InterpreterBase.LET_DEF:
             return self.__execute_let(env, return_type, code)
+
+        # NEW:
+        elif tok == InterpreterBase.THROW_DEF:
+            return self.__execute_throw(env, code)
+        elif tok == InterpreterBase.TRY_DEF:
+            return self.__execute_try(env, return_type, code)
+
         else:
             # Report error via interpreter
             self.interpreter.error(
                 ErrorType.SYNTAX_ERROR, "unknown statement " + tok, tok.line_num
             )
+
+    # NEW CODE ---- for exception handling ----------------------------------------
+
+    # TODO: Check control flow. Use test cases.
+        # Throw not inside try-catch block.
+        # Throw inside 1 try-catch block.
+        # Nested throws -- check on exception variable (shadowing, etc.)
+
+    # (throw <string>)
+    def __execute_throw(self, env, code):
+        self.exception = self.__evaluate_expression(env, code[1], code[0].line_num)
+
+        # Handles error if there is a mismatch.
+        self.__check_type_compatibility(Type(InterpreterBase.STRING_DEF), self.exception.type(), True, code[0].line_num)
+
+        return ObjectDef.STATUS_EXCEPTION_THROWN, None
+
+    # (try (try-statement) (catch-statement))
+    # TODO: Handle scoping for exception variable. Use env, rather member var lol?
+    # TODO: Check parameters. Do I need return_value lol.
+    def __execute_try(self, env, return_type, code):
+        try_statement = code[1]
+        catch_statement = code[2]
+
+        status = ObjectDef.STATUS_PROCEED
+        return_value = None
+        status, return_value = self.__execute_statement(env, return_type, try_statement)
+       
+        # if exception is thrown
+        if status == ObjectDef.STATUS_EXCEPTION_THROWN:
+            # exception is caught
+            status = ObjectDef.STATUS_PROCEED
+
+            # TODO: Might do this initialization in throw statement.
+            # TODO: Remove the variable in catch block statement? Cus it might cause errors -- redefinition of exception var.
+            # add exception variable into env
+            exception_var_def = [[InterpreterBase.STRING_DEF, 'exception', '"' + self.exception.v + '"']]
+            self.__add_locals_to_env(env, exception_var_def, code[0].line_num)
+
+            # if exception returns from method, status == STATUS_RETURN
+            # if uncaught exception thrown, status == STATUS_EXCEPTION_THROWN
+            # else status == STATUS_PROCEED
+            status, return_value = self.__execute_statement(env, return_type, catch_statement)
+
+        return status, return_value
+
+    # NEW CODE ^ ---- for exception handling ----------------------------------------
 
     # This method is used for both the begin and let statements
     # (begin (statement1) (statement2) ... (statementn))
@@ -164,7 +225,7 @@ class ObjectDef:
         return_value = None
         for statement in code[code_start:]:
             status, return_value = self.__execute_statement(env, return_type, statement)
-            if status == ObjectDef.STATUS_RETURN:
+            if status != ObjectDef.STATUS_PROCEED:
                 break
         # if we run through the entire block without a return, then just return proceed
         # we don't want the enclosing block to exit with a return
@@ -214,9 +275,13 @@ class ObjectDef:
     # where params are expressions, and expresion could be a value, or a (+ ...)
     # statement version of a method call; there's also an expression version of a method call below
     def __execute_call(self, env, code):
-        return ObjectDef.STATUS_PROCEED, self.__execute_call_aux(
-            env, code, code[0].line_num
-        )
+        # TODO: CHANGE STATUS RETURN
+        status = ObjectDef.STATUS_PROCEED
+        return_value = self.__execute_call_aux(env, code, code[0].line_num)
+        if type(return_value)==tuple:
+            status = return_value[0]
+            return_value = return_value[1]
+        return status, return_value
 
     # (set varname expression), where expression could be a value, or a (+ ...)
     def __execute_set(self, env, code):
@@ -242,9 +307,8 @@ class ObjectDef:
             if result.is_typeless_null():
                 self.__check_type_compatibility(return_type, result.type(), True, code[0].line_num) 
                 result = Value(return_type, None)  # propagate return type to null ###
-        self.__check_type_compatibility(
-            return_type, result.type(), True, code[0].line_num
-        )
+
+        self.__check_type_compatibility(return_type, result.type(), True, code[0].line_num)
         return ObjectDef.STATUS_RETURN, result
 
     # (print expression1 expression2 ...) where expresion could be a variable, value, or a (+ ...)
@@ -301,14 +365,10 @@ class ObjectDef:
                 code[0].line_num,
             )
         if condition.value():
-            status, return_value = self.__execute_statement(
-                env, return_type, code[2]
-            )  # if condition was true
+            status, return_value = self.__execute_statement(env, return_type, code[2])  # if condition was true
             return status, return_value
         elif len(code) == 4:
-            status, return_value = self.__execute_statement(
-                env, return_type, code[3]
-            )  # if condition was false, do else
+            status, return_value = self.__execute_statement(env, return_type, code[3])  # if condition was false, do else
             return status, return_value
         else:
             return ObjectDef.STATUS_PROCEED, None
@@ -328,11 +388,15 @@ class ObjectDef:
                 return ObjectDef.STATUS_PROCEED, None
             # condition is true, run body of while loop
             status, return_value = self.__execute_statement(env, return_type, code[2])
+            # if status == ObjectDef.STATUS_RETURN or status == ObjectDef.STATUS_EXCEPTION_THROWN:
             if status == ObjectDef.STATUS_RETURN:
                 return (
                     status,
                     return_value,
                 )  # could be a valid return of a value or an error
+            
+            if status == ObjectDef.STATUS_EXCEPTION_THROWN:
+                return status, None
 
     # var_def is a VariableDef
     # this method checks to see if a variable holds a null value, and if so, changes the type of the null value
