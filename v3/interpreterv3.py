@@ -125,7 +125,7 @@ class Interpreter(InterpreterBase):
 
     # type_name = string; call create_parameterized type if type_name is a tclass
     def is_parameterized_type(self, type_name):
-        if '@' in type_name:
+        if InterpreterBase.TYPE_CONCAT_CHAR in type_name:
             return True
         else:
             return False
@@ -141,7 +141,7 @@ class Interpreter(InterpreterBase):
         if self.is_valid_type(tclass_str):
             return
 
-        tclass_list = tclass_str.split("@")
+        tclass_list = tclass_str.split(InterpreterBase.TYPE_CONCAT_CHAR)
         tclass_name = tclass_list[0]
         ptypes_passed_in = tclass_list[1:]
 
@@ -167,7 +167,7 @@ class Interpreter(InterpreterBase):
             # when template class uses itself as a type in its definition, assign it with new parameterized type
             tclass_str_to_assign = tclass_name
             for pt in ptypes_to_assign:
-                tclass_str_to_assign += '@' + pt
+                tclass_str_to_assign += InterpreterBase.TYPE_CONCAT_CHAR + pt
             
             ptypes_to_assign.append(tclass_str_to_assign)
             ptypes_passed_in.append(tclass_str)
