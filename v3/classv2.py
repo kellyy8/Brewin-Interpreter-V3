@@ -103,14 +103,18 @@ class ClassDef:
     # get the classname
     def get_name(self):
         return self.name
+    
+        # returns a FieldDef object
+    def get_field(self, field_name):
+        if field_name not in self.field_map:
+            return None
+        return self.field_map[field_name]
 
-    # get a list of FieldDef objects for all fields in the class
-    def get_fields(self):
-        return self.fields
-
-    # get a list of MethodDef objects for all methods in the class
-    def get_methods(self):
-        return self.methods
+    # returns a MethodDef object
+    def get_method(self, method_name):
+        if method_name not in self.method_map:
+            return None
+        return self.method_map[method_name]
 
     # returns a ClassDef object
     def get_superclass(self):
