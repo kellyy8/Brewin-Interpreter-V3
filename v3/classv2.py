@@ -36,7 +36,7 @@
 """
 
 from intbase import InterpreterBase, ErrorType
-from type_valuev2 import Type, create_value, create_default_value
+from type_valuev2 import Type, create_value
 
 class VariableDef:
     # var_type is a Type() and value is a Value()
@@ -103,18 +103,14 @@ class ClassDef:
     # get the classname
     def get_name(self):
         return self.name
-    
-        # returns a FieldDef object
-    def get_field(self, field_name):
-        if field_name not in self.field_map:
-            return None
-        return self.field_map[field_name]
 
-    # returns a MethodDef object
-    def get_method(self, method_name):
-        if method_name not in self.method_map:
-            return None
-        return self.method_map[method_name]
+    # get a list of FieldDef objects for all fields in the class
+    def get_fields(self):
+        return self.fields
+
+    # get a list of MethodDef objects for all methods in the class
+    def get_methods(self):
+        return self.methods
 
     # returns a ClassDef object
     def get_superclass(self):
@@ -151,21 +147,18 @@ class ClassDef:
 
     # field def: [field typename varname defvalue]
     # returns a VariableDef object that represents that field
-    # PARAMETERIZED TYPES CAN BE CREATED HERE! -- fields
     def __create_variable_def_from_field(self, field_def):
-        # create parameterized type if needed:
-        if self.interpreter.is_parameterized_type(field_def[1]):
-            self.interpreter.create_parameterized_type(field_def[1])
-        
-        # check if field has a specified initial value; if not, create_default_value based on field_type
-        if (len(field_def)==4):
-            var_def = VariableDef(Type(field_def[1]), field_def[2], create_value(field_def[3]))
-            if not self.interpreter.check_type_compatibility(var_def.type, var_def.value.type(), True):
-                self.interpreter.error(ErrorType.TYPE_ERROR, "invalid type/type mismatch with field " + field_def[2], field_def[0].line_num)
-        else:
-            field_type = Type(field_def[1])
-            var_def = VariableDef(field_type, field_def[2], create_default_value(field_type))
-        
+        var_def = VariableDef(
+            Type(field_def[1]), field_def[2], create_value(field_def[3])
+        )
+        if not self.interpreter.check_type_compatibility(
+            var_def.type, var_def.value.type(), True
+        ):
+            self.interpreter.error(
+                ErrorType.TYPE_ERROR,
+                "invalid type/type mismatch with field " + field_def[2],
+                field_def[0].line_num,
+            )
         return var_def
 
     def __create_method_list(self, class_body):
@@ -188,12 +181,7 @@ class ClassDef:
 
     # for a given method, make sure that the parameter types are valid, return type is valid, and param names
     # are not duplicated
-    # PARAMETERIZED TYPES CAN BE CREATED HERE! -- params and return types
     def __check_method_names_and_types(self, method_def):
-        # create parameterized type if needed:
-        if self.interpreter.is_parameterized_type(method_def.return_type.type_name):
-            self.interpreter.create_parameterized_type(method_def.return_type.type_name)
-
         if not self.interpreter.is_valid_type(
             method_def.return_type.type_name
         ) and method_def.return_type != Type(InterpreterBase.NOTHING_DEF): #checks that return type isn't a defined type or void
@@ -210,11 +198,6 @@ class ClassDef:
                     "duplicate formal parameter " + param.name,
                     method_def.line_num,
                 )
-
-            # create parameterized type if needed:
-            if self.interpreter.is_parameterized_type(param.type.type_name):
-                self.interpreter.create_parameterized_type(param.type.type_name)
-
             if not self.interpreter.is_valid_type(param.type.type_name):
                 self.interpreter.error(
                     ErrorType.TYPE_ERROR,
