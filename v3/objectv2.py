@@ -192,18 +192,18 @@ class ObjectDef:
             # create new_env (new scope) & add/update (update to shadow) exception variable into new_env
             new_env = copy.deepcopy(env)
 
-            var_def = new_env.get('exception')
+            var_def = new_env.get(InterpreterBase.EXCEPTION_VARIABLE_DEF)
             if var_def is None:
-                exception_var_def = [[InterpreterBase.STRING_DEF, 'exception', '"' + self.exception.v + '"']]
+                exception_var_def = [[InterpreterBase.STRING_DEF, InterpreterBase.EXCEPTION_VARIABLE_DEF, '"' + self.exception.v + '"']]
                 self.__add_locals_to_env(new_env, exception_var_def, code[0].line_num)
             else:
                 var_type = Type(InterpreterBase.STRING_DEF)
                 val_obj = Value(var_type, '"' + self.exception.v + '"')
 
                 # varDef params: type object, string var name, value object
-                var_obj = VariableDef(var_type, 'exception', val_obj)
+                var_obj = VariableDef(var_type, InterpreterBase.EXCEPTION_VARIABLE_DEF, val_obj)
 
-                new_env.set('exception', var_obj)
+                new_env.set(InterpreterBase.EXCEPTION_VARIABLE_DEF, var_obj)
 
             # if exception returns from method, status == STATUS_RETURN
             # if uncaught exception thrown, status == STATUS_EXCEPTION_THROWN

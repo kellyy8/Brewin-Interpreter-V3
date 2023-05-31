@@ -176,7 +176,7 @@ class Interpreter(InterpreterBase):
             tclass_def = tclass_stored[1:]
 
             # used later to create ClassDef object that will be added to dictionary mapping class_names to ClassDef objects
-            class_def = ['class', tclass_str]
+            class_def = [InterpreterBase.CLASS_DEF, tclass_str]
 
             for item in tclass_def:
                 if item[0] == InterpreterBase.FIELD_DEF:
