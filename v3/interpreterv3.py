@@ -1,8 +1,8 @@
-from classv2 import ClassDef
+from classv3 import ClassDef
 from intbase import InterpreterBase, ErrorType
 from bparser import BParser
-from objectv2 import ObjectDef
-from type_valuev2 import TypeManager
+from objectv3 import ObjectDef
+from type_valuev3 import TypeManager
 
 # need to document that each class has at least one method guaranteed
 

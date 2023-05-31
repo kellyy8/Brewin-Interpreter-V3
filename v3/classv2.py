@@ -1,7 +1,7 @@
 # pylint: disable=too-few-public-methods
 
 """
-# v2
+# v3
 - inheritance
   (class foo inherits bar ...)
   dynamic dispatch
@@ -36,7 +36,7 @@
 """
 
 from intbase import InterpreterBase, ErrorType
-from type_valuev2 import Type, create_value, create_default_value
+from type_valuev3 import Type, create_value, create_default_value
 
 class VariableDef:
     # var_type is a Type() and value is a Value()

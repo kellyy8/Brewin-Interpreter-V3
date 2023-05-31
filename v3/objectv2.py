@@ -1,9 +1,9 @@
-from classv2 import VariableDef
+from classv3 import VariableDef
 import copy
-from env_v2 import EnvironmentManager
+from env_v3 import EnvironmentManager
 from intbase import InterpreterBase, ErrorType
-from type_valuev2 import create_value, create_default_value
-from type_valuev2 import Type, Value
+from type_valuev3 import create_value, create_default_value
+from type_valuev3 import Type, Value
 
 
 class ObjectDef:
