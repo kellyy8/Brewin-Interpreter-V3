@@ -195,7 +195,6 @@ class Interpreter(InterpreterBase):
 
                     field_type = field_def[1]
 
-                    # TODO: Can parameterized types have the same name?
                     # check if field type is parameterized type
                     if field_type in ptypes_to_assign:
                         assigned_type = self.__get_type_to_assign_ptype_with(ptypes_passed_in, ptypes_to_assign, field_type)

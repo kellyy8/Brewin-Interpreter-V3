@@ -210,10 +210,7 @@ class ObjectDef:
             status = ObjectDef.STATUS_PROCEED
 
             # create new_env (new scope) & add/update (update to shadow) exception variable into new_env
-            # TODO: Check why deep copy was needed.
-            # new_env = copy.deepcopy(env)
-
-            new_env = env
+            new_env = copy.deepcopy(env)
             var_def = new_env.get(InterpreterBase.EXCEPTION_VARIABLE_DEF)
             
             # use exception_str (append " to beg and end of self.exception; eval expr removed it in execute_throw)
@@ -328,13 +325,8 @@ class ObjectDef:
         )  # checks/reports type and name errors
         return ObjectDef.STATUS_PROCEED, None
     
-    # PARAMETERIZED TYPES CAN BE CREATED HERE!
     # (return expression) where expresion could be a value, or a (+ ...)
     def __execute_return(self, env, return_type, code):
-        # # create parameterized type if needed:
-        # if self.interpreter.is_parameterized_type(return_type.get_type_name()):
-        #     self.interpreter.create_parameterized_type(return_type.get_type_name())
-
         if len(code) == 1:
             # [return] with no return value; return default value for type
             return ObjectDef.STATUS_RETURN, None
