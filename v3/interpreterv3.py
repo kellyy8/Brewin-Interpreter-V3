@@ -12,6 +12,15 @@ class Interpreter(InterpreterBase):
         super().__init__(console_output, inp)
         self.trace_output = trace_output
 
+        # so that exception variable can be propagated from methods belonging to another class
+        self.exception = None
+
+    def set_exception(self, val):
+        self.exception = val # Value object
+    
+    def get_exception(self):
+        return self.exception # Value object
+
     # run a program, provided in an array of strings, one string per line of source code
     # usese the provided BParser class found in parser.py to parse the program into lists
     def run(self, program):

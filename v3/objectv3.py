@@ -21,7 +21,7 @@ class ObjectDef:
     def __init__(self, interpreter, class_def, anchor_object=None, trace_output=False):
         self.interpreter = interpreter  # objref to interpreter object. used to report errors, get input, produce output
         self.class_def = class_def
-        self.exception = None
+        # self.exception = self.interpreter.get_exception()
 
         if anchor_object is None:
             self.anchor_object = self
@@ -167,10 +167,18 @@ class ObjectDef:
 
     # (throw <string>)
     def __execute_throw(self, env, code):
-        self.exception = self.__evaluate_expression(env, code[1], code[0].line_num)
+        # eval expr returns Value object
+        exception_val = self.__evaluate_expression(env, code[1], code[0].line_num)
+
+        # if call expression has uncaught exception (only call method returns tuple if uncaught exception propagated up)
+        if type(exception_val) == tuple:
+            if exception_val[0] == ObjectDef.STATUS_EXCEPTION_THROWN:
+                return ObjectDef.STATUS_EXCEPTION_THROWN, None
+
+        self.interpreter.set_exception(exception_val)
 
         # Handles error if there is a mismatch.
-        self.__check_type_compatibility(Type(InterpreterBase.STRING_DEF), self.exception.type(), True, code[0].line_num)
+        self.__check_type_compatibility(Type(InterpreterBase.STRING_DEF), exception_val.type(), True, code[0].line_num)
 
         return ObjectDef.STATUS_EXCEPTION_THROWN, None
 
@@ -190,15 +198,22 @@ class ObjectDef:
             status = ObjectDef.STATUS_PROCEED
 
             # create new_env (new scope) & add/update (update to shadow) exception variable into new_env
-            new_env = copy.deepcopy(env)
+            # TODO: Check why deep copy was needed.
+            # new_env = copy.deepcopy(env)
 
+            new_env = env
             var_def = new_env.get(InterpreterBase.EXCEPTION_VARIABLE_DEF)
+            
+            # use exception_str (append " to beg and end of self.exception; eval expr removed it in execute_throw)
             if var_def is None:
-                exception_var_def = [[InterpreterBase.STRING_DEF, InterpreterBase.EXCEPTION_VARIABLE_DEF, '"' + self.exception.v + '"']]
+                exception_str = '"' + self.interpreter.exception.v + '"'
+                exception_var_def = [[InterpreterBase.STRING_DEF, InterpreterBase.EXCEPTION_VARIABLE_DEF, exception_str]]
                 self.__add_locals_to_env(new_env, exception_var_def, code[0].line_num)
+            
+            # use self.exception.v (val objects store parsed strings with " at beg and end removed)
             else:
                 var_type = Type(InterpreterBase.STRING_DEF)
-                val_obj = Value(var_type, '"' + self.exception.v + '"')
+                val_obj = Value(var_type, self.interpreter.exception.v)
 
                 # varDef params: type object, string var name, value object
                 var_obj = VariableDef(var_type, InterpreterBase.EXCEPTION_VARIABLE_DEF, val_obj)
@@ -290,6 +305,12 @@ class ObjectDef:
     # (set varname expression), where expression could be a value, or a (+ ...)
     def __execute_set(self, env, code):
         val = self.__evaluate_expression(env, code[2], code[0].line_num)
+
+        # if call expression has uncaught exception (only call method returns tuple if uncaught exception propagated up)
+        if type(val) == tuple:
+            if val[0] == ObjectDef.STATUS_EXCEPTION_THROWN:
+                return ObjectDef.STATUS_EXCEPTION_THROWN, None
+
         self.__set_variable_aux(
             env, code[1], val, code[0].line_num
         )  # checks/reports type and name errors
@@ -307,6 +328,12 @@ class ObjectDef:
             return ObjectDef.STATUS_RETURN, None
         else:
             result = self.__evaluate_expression(env, code[1], code[0].line_num)
+
+            # if call expression has uncaught exception (only call method returns tuple if uncaught exception propagated up)
+            if type(result) == tuple:
+                if result[0] == ObjectDef.STATUS_EXCEPTION_THROWN:
+                    return ObjectDef.STATUS_EXCEPTION_THROWN, None
+
             # CAREY FIX
             if result.is_typeless_null():
                 self.__check_type_compatibility(return_type, result.type(), True, code[0].line_num) 
@@ -321,6 +348,12 @@ class ObjectDef:
         for expr in code[1:]:
             # TESTING NOTE: Will not test printing of object references
             term = self.__evaluate_expression(env, expr, code[0].line_num)
+
+            # if call expression has uncaught exception (only call method returns tuple if uncaught exception propagated up)
+            if type(term) == tuple:
+                if term[0] == ObjectDef.STATUS_EXCEPTION_THROWN:
+                    return ObjectDef.STATUS_EXCEPTION_THROWN, None
+
             val = term.value()
             typ = term.type()
             if typ == ObjectDef.BOOL_TYPE_CONST:
@@ -362,6 +395,12 @@ class ObjectDef:
     # variable without ()s, or a boolean expression in parens, like (> 5 a)
     def __execute_if(self, env, return_type, code):
         condition = self.__evaluate_expression(env, code[1], code[0].line_num)
+
+        # if call expression has uncaught exception (only call method returns tuple if uncaught exception propagated up)
+        if type(condition) == tuple:
+            if condition[0] == ObjectDef.STATUS_EXCEPTION_THROWN:
+                return ObjectDef.STATUS_EXCEPTION_THROWN, None
+
         if condition.type() != ObjectDef.BOOL_TYPE_CONST:
             self.interpreter.error(
                 ErrorType.TYPE_ERROR,
@@ -382,6 +421,12 @@ class ObjectDef:
     def __execute_while(self, env, return_type, code):
         while True:
             condition = self.__evaluate_expression(env, code[1], code[0].line_num)
+
+            # if call expression has uncaught exception (only call method returns tuple if uncaught exception propagated up)
+            if type(condition) == tuple:
+                if condition[0] == ObjectDef.STATUS_EXCEPTION_THROWN:
+                    return ObjectDef.STATUS_EXCEPTION_THROWN, None
+
             if condition.type() != ObjectDef.BOOL_TYPE_CONST:
                 self.interpreter.error(
                     ErrorType.TYPE_ERROR,
@@ -441,6 +486,17 @@ class ObjectDef:
         if operator in self.binary_op_list:
             operand1 = self.__evaluate_expression(env, expr[1], line_num_of_statement)
             operand2 = self.__evaluate_expression(env, expr[2], line_num_of_statement)
+
+            if type(operand1) == tuple:
+                status1 = operand1[0]
+                if status1 == ObjectDef.STATUS_EXCEPTION_THROWN:
+                    return status1, None
+                    
+            if type(operand2) == tuple:
+                status2 = operand2[0]
+                if status2 == ObjectDef.STATUS_EXCEPTION_THROWN:
+                    return status2, None
+
             if (
                 operand1.type() == operand2.type()
                 and operand1.type() == ObjectDef.INT_TYPE_CONST
@@ -494,6 +550,12 @@ class ObjectDef:
             )
         if operator in self.unary_op_list:
             operand = self.__evaluate_expression(env, expr[1], line_num_of_statement)
+
+            # if call expression has uncaught exception (only call method returns tuple if uncaught exception propagated up)
+            if type(operand) == tuple:
+                if operand[0] ==  ObjectDef.STATUS_EXCEPTION_THROWN:
+                    return ObjectDef.STATUS_EXCEPTION_THROWN, None
+
             if operand.type() == ObjectDef.BOOL_TYPE_CONST:
                 if operator not in self.unary_ops[InterpreterBase.BOOL_DEF]:
                     self.interpreter.error(
@@ -537,6 +599,12 @@ class ObjectDef:
         else:
             # return a Value() object which has a type and a value
             obj_val = self.__evaluate_expression(env, obj_name, line_num_of_statement)
+
+            # if call expression has uncaught exception (only call method returns tuple if uncaught exception propagated up)
+            if type(obj_val) == tuple:
+                if obj_val[0] ==  ObjectDef.STATUS_EXCEPTION_THROWN:
+                    return ObjectDef.STATUS_EXCEPTION_THROWN, None
+            
             if obj_val.is_null():
                 self.interpreter.error(
                     ErrorType.FAULT_ERROR, "null dereference", line_num_of_statement
