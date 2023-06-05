@@ -40,12 +40,15 @@ class ObjectDef:
                 cur_obj = cur_obj.super_object
                 continue
             method_def = cur_obj.methods[method_name]
-            if len(actual_params) == len(
-                method_def.formal_params
-            ) and self.__compatible_param_types(
-                actual_params, method_def.formal_params
-            ):
-                break
+            if len(actual_params) == len(method_def.formal_params):
+                r = self.__compatible_param_types(actual_params, method_def.formal_params)
+
+                # new conditional statement
+                if type(r) == tuple:
+                    return r
+                
+                if r == True:
+                    break
 
             cur_obj = cur_obj.super_object
 
@@ -55,8 +58,13 @@ class ObjectDef:
     # the caller passes in its line number so if there's an error (e.g., mismatched # of parameters or unknown
     # method name) we can generate an error at the source (where the call is initiated) for better context
     def call_method(self, method_name, actual_params, super_only, line_num_of_caller):
+        
+        method = self.__get_obj_with_method(self, method_name, actual_params)
+        if type(method) == tuple:
+            return ObjectDef.STATUS_EXCEPTION_THROWN, None
+        
         # check to see if we have a method in this class or its base class(es) matching this signature
-        if self.__get_obj_with_method(self, method_name, actual_params) is None:
+        if method is None:
             self.interpreter.error(
                 ErrorType.NAME_ERROR,
                 "unknown method " + method_name,
@@ -115,10 +123,14 @@ class ObjectDef:
     # checks whether each formal parameter has a compatible type with the actual parameter
     def __compatible_param_types(self, actual_params, formal_params):
         for formal, actual in zip(formal_params, actual_params):
-            if not self.interpreter.check_type_compatibility(
-                formal.type, actual.type(), True
-            ):
+
+            # if call expression has uncaught exception (only call method returns tuple if uncaught exception propagated up)
+            if type(actual) == tuple and actual[0] == ObjectDef.STATUS_EXCEPTION_THROWN:
+                return actual
+
+            if not self.interpreter.check_type_compatibility(formal.type, actual.type(), True):
                 return False
+
         return True
 
     # returns (status_code, return_value) where:
