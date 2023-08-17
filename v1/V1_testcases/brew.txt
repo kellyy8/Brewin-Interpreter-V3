@@ -1,0 +1,19 @@
+(class main
+  (field x 0)
+  (field y 0)
+  (method foo () 
+    (begin
+      (inputi x)
+      (inputi y)
+      (while (> x 0)
+      (begin 
+        (if (> y 0) (begin (print "y is " y) (set y (- y 1))) (return y))
+        (print "x is " x)
+        (set x (- x 1))
+        
+        )
+      )
+    )
+  )
+ (method main () (print (call me foo)))
+)
