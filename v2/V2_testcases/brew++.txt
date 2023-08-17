@@ -1,0 +1,40 @@
+(class main
+    (field person p null)
+    (field student s null)
+    (field dog d null)
+
+(method void main ()
+      (begin
+        (set p (new person))
+        (set s (new student))
+        
+        (set s (call me returns_tp))      # s = null object of type tp
+        #(set d s)                         # type error: type mismatch dog and student
+      )
+    )
+
+    (method void main ()
+      (begin
+        (set p (new person))
+        (set s (new student))
+        
+        (set s (call me returns_tp))      # s = null object of type tp
+        #(set d s)                         # type error: type mismatch dog and student
+      )
+    )
+
+    (method person returns_person ()
+      (return null)
+    )
+    
+    (method teachers_pet returns_tp ()
+      (return null)
+    )
+        
+    (method void takes_stud ((student stud)) (print "takes_stud"))
+)
+
+(class person (method void foo () (print "food")))
+(class student inherits person (method void foo () (print "food")))
+(class teachers_pet inherits student (method void foo () (print "food")))
+(class dog (method void foo () (print "food")))
