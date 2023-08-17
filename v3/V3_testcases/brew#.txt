@@ -1,0 +1,30 @@
+(class main
+ (method void foo ()
+   (while true
+     (begin
+       (print "argh")
+       (throw "blah")
+       (print "yay!")
+     )
+   )
+ )
+
+ (method void bar ()
+  (begin
+     (print "hello")
+     (call me foo)
+     (print "bye")
+  )
+ )
+
+ (method void main ()
+   (begin
+     (try
+       (call me bar)
+       (print exception)
+     )
+     (print "woot!")
+   )
+ )
+)
+
